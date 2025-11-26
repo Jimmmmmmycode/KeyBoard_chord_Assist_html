@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>钢琴和弦学习器</title>
+    <!-- Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter font for clean typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Custom scrollbar for the keyboard container */
+        .overflow-x-auto::-webkit-scrollbar {
+            height: 8px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-thumb {
+            background-color: #4f46e5; /* Indigo */
+            border-radius: 4px;
+        }
+        .overflow-x-auto::-webkit-scrollbar-track {
+            background-color: #1f2937; /* Dark Gray */
+        }
+        /* Ensure the body uses the Inter font */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            overflow-x: hidden; /* Prevent body level horizontal scroll from slight overflow */
+        }
+        
+        /* Key styling for visual feedback */
+        .piano-key {
+            transition: all 0.15s ease-in-out;
+            cursor: pointer;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+        }
+        
+        .white-key {
+            fill: #ffffff;
+            stroke: #525252;
+            stroke-width: 1.5;
+        }
+
+        .black-key {
+            fill: #1f2937;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.8), 0 2px 4px -2px rgba(0, 0, 0, 0.8);
+        }
+
+        /* Highlight classes */
+        .key-highlight-root {
+            fill: #ef4444 !important; /* Red 500 */
+        }
+        .key-highlight-tone {
+            fill: #a855f7 !important; /* Purple 500 */
+        }
+        .black-key.key-highlight-root {
+            fill: #b91c1c !important; /* Darker Red */
+        }
+        .black-key.key-highlight-tone {
+            fill: #7e22ce !important; /* Darker Purple */
+        }
+    </style>
+</head>
+<body class="antialiased bg-gray-900 text-gray-100 p-4 sm:p-8">
+
+    <div id="app-container" class="min-h-screen">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold text-indigo-400 mb-2 tracking-tight">
+                🎹 钢琴和弦可视化探索器 (Pure JS)
+            </h1>
+            <p class="text-lg text-gray-400">
+                在 88 键键盘上可视化顺阶和弦和修饰和弦。
+            </p>
+        </header>
+        
+        <!-- --- TOP CONTROLS SECTION --- -->
+        <div class="max-w-6xl mx-auto bg-gray-800/50 backdrop-blur-md p-6 rounded-xl shadow-2xl mb-8 border border-indigo-700/30">
+            <div class="flex flex-col md:flex-row gap-4 justify-between items-center">
+
+                <!-- Key & Scale Selection -->
+                <div class="flex gap-4 w-full md:w-full justify-center">
+                    <select id="key-select" class="bg-gray-700/70 border border-indigo-600/50 text-gray-200 rounded-lg p-2.5 shadow-inner focus:ring-indigo-500 focus:border-indigo-500 transition-colors w-1/2">
+                        <!-- Options filled by JS -->
+                    </select>
+                    <select id="scale-type-select" class="bg-gray-700/70 border border-indigo-600/50 text-gray-200 rounded-lg p-2.5 shadow-inner focus:ring-indigo-500 focus:border-indigo-500 transition-colors w-1/2">
+                        <option value="Major">Major Scale (大调)</option>
+                        <option value="Minor">Minor Scale (小调)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Octave Toggle -->
+            <div class="mt-6 pt-4 border-t border-gray-700 flex justify-center">
+                <label for="octave-toggle" class="flex items-center space-x-2 cursor-pointer select-none">
+                    <span class="text-gray-300 font-medium text-sm">Display Across All Octaves (显示所有八度)</span>
+                    <div class="relative">
+                        <input type="checkbox" id="octave-toggle" class="sr-only">
+                        <div class="block bg-gray-600 w-10 h-6 rounded-full transition duration-300 ease-in-out"></div>
+                        <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition duration-300 ease-in-out"></div>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <!-- --- PIANO KEYBOARD & INFO --- -->
+        <div class="max-w-6xl mx-auto mb-4 p-2">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 space-y-2 sm:space-y-0">
+                <p class="text-sm text-gray-400">
+                    当前和弦: <span id="chord-name-display" class="text-indigo-300 font-semibold">C Major Triad</span>
+                    - <span id="inversion-display">Root Position (原位)</span>
+                </p>
+            </div>
+            
+            <!-- Piano Keyboard Container -->
+            <div id="keyboard-container" class="flex justify-start p-4 bg-gray-900/40 backdrop-blur-md rounded-xl shadow-2xl overflow-x-auto border border-gray-700/50">
+                <svg id="piano-svg" class="select-none min-w-max"></svg>
+            </div>
+        </div>
+
+        <!-- --- CHORD GRID & MODIFIERS --- -->
+        <div class="max-w-6xl mx-auto mt-8">
+            <h2 id="scale-title" class="text-2xl font-bold text-gray-300 mb-4 text-center">
+                C Major 顺阶和弦
+            </h2>
+            <!-- Chord Degree Buttons -->
+            <div id="chord-grid" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-3">
+                <!-- Chord buttons will be inserted here -->
+            </div>
+
+            <!-- Modifiers for Selected Chord: Base Types -->
+            <div class="mt-8 p-4 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-teal-700/30 shadow-inner">
+                <p class="text-gray-400 font-medium mb-3 text-teal-400 font-bold">
+                    基础和弦类型 (Triads, Power, 7ths, 9ths, Suspended):
+                </p>
+                <div id="base-modifiers-container" class="flex flex-wrap gap-2 justify-start">
+                    <!-- Modifier buttons will be inserted here -->
+                </div>
+            </div>
+            
+            <!-- Modifiers for Selected Chord: Complex Types (Added 11th and 13th) -->
+            <div class="mt-4 p-4 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-rose-700/30 shadow-inner">
+                <p class="text-gray-400 font-medium mb-3 text-rose-400 font-bold">
+                    复杂和弦类型 (Extensions Only - 11th & 13th):
+                </p>
+                <div id="complex-modifiers-container" class="flex flex-wrap gap-2 justify-start">
+                    <!-- Modifier buttons will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Current Chord Note Information -->
+            <div class="mt-6 p-4 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-indigo-700/30 shadow-inner">
+                <p class="text-gray-400 font-medium mb-2">当前和弦组成音:</p>
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start space-y-2 sm:space-y-0">
+                    <!-- Solfege/Degree Display -->
+                    <div class="flex-1">
+                        <p class="text-sm text-gray-400">首调音级 (Scale Degrees):</p>
+                        <p id="degree-string-display" class="text-2xl font-mono tracking-widest text-emerald-400 mt-1">
+                            1 - 3 - 5
+                        </p>
+                    </div>
+                    <!-- Absolute Note Display -->
+                    <div class="flex-1 sm:text-right">
+                        <p class="text-sm text-gray-400">绝对音名 (Absolute Notes):</p>
+                        <p id="absolute-notes-display" class="2xl font-mono tracking-widest text-indigo-400 mt-1">
+                            C - E - G
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="mt-12 text-center text-sm text-gray-500">
+            <p>© 2024 Visual Piano Chord Explorer. Built with Vanilla JS & Tailwind CSS.</p>
+        </footer>
+    </div>
+
+
+    <script>
+        // --- CORE MUSIC THEORY CONSTANTS (同 React 版本) ---
+
+        const ALL_NOTES_SHARP = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const KEYBOARD_NOTES = (() => {
+            const notes = [];
+            let octave = 0;
+            let noteIndex = 9; // A
+            for (let i = 0; i < 88; i++) {
+                const noteName = ALL_NOTES_SHARP[noteIndex];
+                notes.push({
+                    index: i,
+                    note: noteName,
+                    octave: octave,
+                    fullNote: `${noteName}${octave}`.replace('##', '#'),
+                    isWhite: !noteName.includes('#')
+                });
+                noteIndex = (noteIndex + 1) % 12;
+                if (i >= 2 && noteIndex === 0) {
+                    octave++;
+                }
+            }
+            return notes;
+        })();
+
+        // Interval Structures (和弦结构定义)
+        const INTERVALS = {
+            'Triad': [0, 4, 7], 'min': [0, 3, 7], 'dim': [0, 3, 6], 'aug': [0, 4, 8],
+            'power': [0, 7], 
+            '7th': [0, 4, 7, 10], 'Maj7': [0, 4, 7, 11], 'min7': [0, 3, 7, 10], 'hdim7': [0, 3, 6, 10],
+            'sus2': [0, 2, 7], 'sus4': [0, 5, 7],
+            'add9': [0, 4, 7, 14], 'min-add9': [0, 3, 7, 14],
+            'add11': [0, 4, 7, 17], 'min-add11': [0, 3, 7, 17],
+            'add13': [0, 4, 7, 21], 'min-add13': [0, 3, 7, 21],
+            '6th': [0, 4, 7, 9], 'min6th': [0, 3, 7, 9],
+            '9th': [0, 4, 7, 10, 14], 'Maj9': [0, 4, 7, 11, 14], 'min9': [0, 3, 7, 10, 14],
+            '11th': [0, 4, 7, 10, 14, 17],
+            '13th': [0, 4, 7, 10, 14, 21],
+        };
+
+        const KEY_NAMES = [
+            { value: 'C', label: 'C Major / C Minor' }, { value: 'C#', label: 'C# Major / C# Minor' },
+            { value: 'D', label: 'D Major / D Minor' }, { value: 'D#', label: 'Eb Major / Eb Minor' },
+            { value: 'E', label: 'E Major / E Minor' }, { value: 'F', label: 'F Major / F Minor' },
+            { value: 'F#', label: 'F# Major / F# Minor' }, { value: 'G', label: 'G Major / G Minor' },
+            { value: 'G#', label: 'G# Minor / Ab Major' }, { value: 'A', label: 'A Major / A Minor' },
+            { value: 'A#', label: 'Bb Major / Bb Minor' }, { value: 'B', label: 'B Major / B Minor' },
+        ];
+
+        const BASE_MODIFIERS = [
+            { key: 'Triad', label: 'Triad (默认三和弦)' }, { key: 'power', label: 'Power (强力和弦 1/5)' }, 
+            { key: '6th', label: 'Sixth (6/m6 - 六和弦)' }, { key: '7th', label: 'Seventh (Maj7/m7/Dom7/ø7 - 七和弦)' },
+            { key: '9th', label: 'Ninth (Maj9/m9/Dom9 - 九和弦)' }, { key: 'Aug', label: 'Augmented (+ - 增和弦)' },
+            { key: 'Dim', label: 'Diminished (° - 减和弦)' }, { key: 'hdim7', label: 'Half-diminished (ø7 - 半减七和弦)' },
+            { key: 'sus2', label: 'Sus2 (挂留二度)' }, { key: 'sus4', label: 'Sus4 (挂留四度)' },
+            { key: 'add9', label: 'Add9 (附加九度)' },
+        ];
+
+        const COMPLEX_MODIFIERS = [
+            { key: 'add11', label: 'Add11 (附加十一度)' }, { key: 'add13', label: 'Add13 (附加十三度)' },
+            { key: '11th', label: '11th (十一度和弦)' }, { key: '13th', label: '13th (十三度和弦)' },
+        ];
+        
+        const SCALE_FORMULAS = {
+            'Major': [0, 2, 4, 5, 7, 9, 11],
+            'Minor': [0, 2, 3, 5, 7, 8, 10],
+        };
+
+        const MAJOR_CHORD_QUALITIES = [
+            ['Triad', 'Maj7', 'I'], ['min', 'min7', 'ii'], ['min', 'min7', 'iii'],
+            ['Triad', 'Maj7', 'IV'], ['Triad', '7th', 'V'], ['min', 'min7', 'vi'], ['dim', 'hdim7', 'vii°'],
+        ];
+        const MINOR_CHORD_QUALITIES = [
+            ['min', 'min7', 'i'], ['dim', 'hdim7', 'ii°'], ['Triad', 'Maj7', 'III'],
+            ['min', 'min7', 'iv'], ['min', '7th', 'v'], ['Triad', 'Maj7', 'VI'], ['Triad', '7th', 'VII'],
+        ];
+
+        // Find the index of C5 (Octave 5) for voicing 13th chords
+        const C5_INDEX = KEYBOARD_NOTES.findIndex(k => k.fullNote === 'C5');
+
+
+        // --- STATE MANAGEMENT ---
+        let state = {
+            selectedKey: 'C',
+            scaleType: 'Major',
+            currentChordIndex: 0,
+            displayAllOctaves: false,
+            // Initialize 7 diatonic chords to Triad modifier
+            chordModifiers: Array(7).fill('Triad'), 
+        };
+
+        // --- UTILITY FUNCTIONS ---
+        
+        const normalizeIndex = (index) => (index % 12 + 12) % 12;
+
+        const getChromaticIndex = (noteName) => {
+            const sharpName = noteName
+                .replace('Db', 'C#').replace('Eb', 'D#').replace('Gb', 'F#')
+                .replace('Ab', 'G#').replace('Bb', 'A#').replace('b', '');
+            
+            let index = ALL_NOTES_SHARP.indexOf(sharpName);
+            if (index === -1) index = ALL_NOTES_SHARP.indexOf(noteName); // Fallback
+
+            return index;
+        };
+        
+        const intervalToDegree = (interval) => {
+            switch (interval) {
+                case 0: return '1'; case 1: return 'b2'; case 2: return '2'; case 3: return 'b3'; 
+                case 4: return '3'; case 5: return '4'; case 6: return 'b5'; case 7: return '5'; 
+                case 8: return '#5'; case 9: return '6'; case 10: return 'b7'; case 11: return '7';
+                case 12: return '8'; case 13: return 'b9(=b2)'; case 14: return '9(=2)'; case 15: return '#9';
+                case 16: return 'b11(=b4)'; case 17: return '11(=4)'; case 18: return '#11'; case 19: return '12(=5)';
+                case 20: return 'b13(=b6)'; case 21: return '13(=6)'; default: return interval.toString();
+            }
+        };
+
+        const getIntervalKey = (diatonicTriad, diatonicSeventh, modifier) => {
+            switch (modifier) {
+                case 'power': return 'power';
+                case '9th':
+                    if (diatonicSeventh === '7th') return '9th';
+                    if (diatonicSeventh === 'Maj7') return 'Maj9';
+                    if (diatonicTriad === 'min') return 'min9'; 
+                    return '9th';
+                case '7th': return diatonicSeventh;
+                case '6th': return diatonicTriad === 'min' ? 'min6th' : '6th';
+                case 'Aug': return 'aug';
+                case 'Dim': return 'dim';
+                case 'hdim7': return 'hdim7';
+                case 'sus2': return 'sus2';
+                case 'sus4': return 'sus4';
+                case 'add9': return diatonicTriad === 'min' || diatonicTriad === 'dim' ? 'min-add9' : 'add9';
+                case 'add11': return diatonicTriad === 'min' || diatonicTriad === 'dim' ? 'min-add11' : 'add11';
+                case 'add13': return diatonicTriad === 'min' || diatonicTriad === 'dim' ? 'min-add13' : 'add13';
+                case '11th': return '11th'; 
+                case '13th': return '13th'; 
+                case 'Triad':
+                default: return diatonicTriad;
+            }
+        }
+
+
+        // --- CORE CHORD CALCULATION LOGIC (Same as React version) ---
+
+        const getChordDetails = (root, scaleType, degree, modifier, displayAllOctaves) => {
+            const getScaleNotes = (root, scaleType) => {
+                const intervals = SCALE_FORMULAS[scaleType];
+                const rootIndex = getChromaticIndex(root);
+                const notes = intervals.map(interval => ALL_NOTES_SHARP[normalizeIndex(rootIndex + interval)]);
+                const enharmonicMap = { 'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb' };
+                const flatKeys = ['F', 'A#', 'D#', 'G#', 'C#', 'F#'];
+                const useFlats = flatKeys.includes(root);
+                return notes.map(note => (useFlats && enharmonicMap[note]) ? enharmonicMap[note] : note);
+            };
+
+            const scaleNotes = getScaleNotes(root, scaleType);
+            const qualities = scaleType === 'Major' ? MAJOR_CHORD_QUALITIES : MINOR_CHORD_QUALITIES;
+            const [diatonicTriad, diatonicSeventh, romanNumeral] = qualities[degree];
+            const finalIntervalKey = getIntervalKey(diatonicTriad, diatonicSeventh, modifier);
+            const intervals = INTERVALS[finalIntervalKey] || INTERVALS['Triad'];
+            const chordRootNote = scaleNotes[degree];
+            const chordRoot011Index = getChromaticIndex(chordRootNote);
+
+            const omittedIntervals = [];
+            if (finalIntervalKey === '11th') { omittedIntervals.push(4, 7); } 
+            else if (finalIntervalKey === '13th') { omittedIntervals.push(4, 7, 17); }
+
+            const degreeString = intervals.map(intervalToDegree).join(' - ');
+            const chordRootNote_Sharp = ALL_NOTES_SHARP[chordRoot011Index];
+            let rootKeyIndex_88 = KEYBOARD_NOTES.findIndex(k => k.note === chordRootNote_Sharp && k.octave === 4);
+            if (rootKeyIndex_88 === -1) { rootKeyIndex_88 = KEYBOARD_NOTES.findIndex(k => k.note === chordRootNote_Sharp); }
+            if (rootKeyIndex_88 === -1) { return { name: 'N/A', highlightNotes: [], highlightNotesWithOctave: [], degreeString: 'N/A', inversion: 'Root Position (原位)' }; }
+
+            let baseChordNotes = [];
+            baseChordNotes.push(KEYBOARD_NOTES[rootKeyIndex_88]);
+            let lastKeyIndex = rootKeyIndex_88;
+            const subsequentIntervals = intervals.slice(1).sort((a, b) => a - b);
+            const fullIntervals = [0, ...subsequentIntervals].sort((a, b) => a - b);
+
+            for (let interval of subsequentIntervals) {
+                const target011Index = normalizeIndex(chordRoot011Index + interval);
+                let foundKeyIndex = -1;
+                let searchStartIndex = lastKeyIndex + 1;
+                if (interval === 21 && C5_INDEX !== -1) { searchStartIndex = Math.max(searchStartIndex, C5_INDEX); }
+
+                for (let i = searchStartIndex; i < 88; i++) {
+                    if (KEYBOARD_NOTES[i].note === ALL_NOTES_SHARP[target011Index]) {
+                        foundKeyIndex = i;
+                        break;
+                    }
+                }
+
+                if (foundKeyIndex !== -1) {
+                    baseChordNotes.push(KEYBOARD_NOTES[foundKeyIndex]);
+                    lastKeyIndex = foundKeyIndex;
+                }
+            }
+
+            const targetIntervalIndices = fullIntervals.map(i => normalizeIndex(chordRoot011Index + i));
+            let notesToHighlight = displayAllOctaves ?
+                KEYBOARD_NOTES.filter(key => targetIntervalIndices.includes(getChromaticIndex(key.note)))
+                : baseChordNotes;
+
+            const highlightNotesWithOctave = notesToHighlight.map(n => {
+                let displayNote = n.note;
+                const noteIndex = getChromaticIndex(n.note);
+                const scaleNoteAtIndex = scaleNotes.find(scaleNote => getChromaticIndex(scaleNote) === noteIndex);
+
+                if (scaleNoteAtIndex) { displayNote = scaleNoteAtIndex; }
+
+                const intervalFromRoot = normalizeIndex(noteIndex - chordRoot011Index);
+                let functionIntervalValue = fullIntervals.find(i => normalizeIndex(i) === intervalFromRoot);
+                if (functionIntervalValue === undefined) {
+                     functionIntervalValue = fullIntervals.find(i => normalizeIndex(i % 12) === intervalFromRoot);
+                }
+                const isOmitted = omittedIntervals.includes(functionIntervalValue);
+                const functionLabel = intervalToDegree(functionIntervalValue !== undefined ? functionIntervalValue : intervalFromRoot);
+                const keyboardLabel = functionLabel.replace(/\(=.*\)/, '');
+                
+                return {
+                    fullNote: n.fullNote,
+                    keyboardIndex: n.index,
+                    displayNote: displayNote,
+                    keyboardLabel: keyboardLabel,
+                    isRoot: functionIntervalValue === 0,
+                    isOmitted: isOmitted,
+                };
+            });
+
+            let suffix = '';
+            if (finalIntervalKey === 'power') suffix = '5';
+            else if (finalIntervalKey === 'Triad') suffix = '';
+            else if (finalIntervalKey === 'min') suffix = 'm';
+            else if (finalIntervalKey === 'dim') suffix = '°';
+            else if (finalIntervalKey === 'hdim7') suffix = 'ø7';
+            else if (finalIntervalKey === 'aug') suffix = '+';
+            else if (finalIntervalKey === '7th') suffix = '7';
+            else if (finalIntervalKey === 'Maj7') suffix = 'Maj7';
+            else if (finalIntervalKey === 'min7') suffix = 'm7';
+            else if (finalIntervalKey === 'sus2') suffix = 'sus2';
+            else if (finalIntervalKey === 'sus4') suffix = 'sus4';
+            else if (finalIntervalKey === 'add9') suffix = 'add9';
+            else if (finalIntervalKey === 'min-add9') suffix = 'm(add9)';
+            else if (finalIntervalKey === 'add11') suffix = 'add11'; 
+            else if (finalIntervalKey === 'min-add11') suffix = 'm(add11)';
+            else if (finalIntervalKey === 'add13') suffix = 'add13'; 
+            else if (finalIntervalKey === 'min-add13') suffix = 'm(add13)';
+            else if (finalIntervalKey === '6th') suffix = '6';
+            else if (finalIntervalKey === 'min6th') suffix = 'm6';
+            else if (finalIntervalKey === '9th') suffix = '9';
+            else if (finalIntervalKey === 'Maj9') suffix = 'Maj9';
+            else if (finalIntervalKey === 'min9') suffix = 'm9';
+            else if (finalIntervalKey === '11th') suffix = '11';
+            else if (finalIntervalKey === '13th') suffix = '13';
+
+            const chordName = `${chordRootNote}${suffix}`;
+            const highlightNotes = highlightNotesWithOctave.map(n => n.displayNote).filter((v, i, a) => a.indexOf(v) === i);
+
+            return {
+                name: chordName,
+                roman: romanNumeral,
+                inversion: 'Root Position (原位)',
+                highlightNotesWithOctave,
+                degreeString: degreeString,
+                highlightNotes: highlightNotes,
+            };
+        };
+
+
+        // --- DOM RENDERING FUNCTIONS ---
+
+        const renderPianoKeyboard = (highlightedNotesWithOctave) => {
+            const svg = document.getElementById('piano-svg');
+            svg.innerHTML = ''; // Clear previous keys
+            
+            const KEY_WIDTH = 40;
+            const BLACK_KEY_WIDTH = KEY_WIDTH * 0.6;
+            const BLACK_KEY_HEIGHT = 120;
+            const WHITE_KEY_HEIGHT = 200;
+
+            const whiteKeyMap = {};
+            let currentX = 0;
+
+            // 1. Calculate White Key positions
+            for (const key of KEYBOARD_NOTES) {
+                if (key.isWhite) {
+                    whiteKeyMap[key.index] = { xPos: currentX };
+                    currentX += KEY_WIDTH;
+                }
+            }
+            const svgWidth = currentX;
+            svg.setAttribute('width', svgWidth);
+            svg.setAttribute('height', WHITE_KEY_HEIGHT);
+            svg.setAttribute('viewBox', `0 0 ${svgWidth} ${WHITE_KEY_HEIGHT}`);
+
+
+            const blackKeysHtml = []; // Black keys must be rendered after white keys
+            const keyLabelsHtml = [];
+            const functionLabelsHtml = [];
+
+            // 2. Render all 88 keys
+            for (const key of KEYBOARD_NOTES) {
+                const fullNote = key.fullNote;
+                
+                let xPos;
+                if (key.isWhite) {
+                    xPos = whiteKeyMap[key.index].xPos;
+                } else {
+                    let prevWhiteKeyIndex = key.index - 1;
+                    while(prevWhiteKeyIndex >= 0 && !KEYBOARD_NOTES[prevWhiteKeyIndex].isWhite) {
+                        prevWhiteKeyIndex--;
+                    }
+                    xPos = whiteKeyMap[prevWhiteKeyIndex].xPos;
+                }
+                
+                const noteData = highlightedNotesWithOctave.find(hn => hn.fullNote === fullNote);
+                const isHl = !!noteData;
+                const isRoot = noteData ? noteData.isRoot : false;
+                const isOmitted = noteData ? noteData.isOmitted : false;
+
+                // --- Common classes ---
+                let highlightClass = '';
+                let keyBaseClass = 'piano-key';
+                let labelFillClass = 'fill-gray-600';
+
+                if (isHl) {
+                    // Root: Red, Tone: Purple, Omitted: Gray with high transparency
+                    if (isRoot) {
+                        highlightClass = 'key-highlight-root';
+                        labelFillClass = 'fill-red-900';
+                    } else if (isOmitted) {
+                        highlightClass = 'fill-gray-500/30'; // Very subtle highlight for omitted tone
+                        labelFillClass = 'fill-gray-400';
+                    } else {
+                        highlightClass = 'key-highlight-tone';
+                        labelFillClass = 'fill-purple-900';
+                    }
+                }
+
+
+                if (key.isWhite) {
+                    // White Key
+                    const whiteKey = `<rect 
+                        id="key-${key.index}" 
+                        x="${xPos}" y="0" width="${KEY_WIDTH}" height="${WHITE_KEY_HEIGHT}" 
+                        rx="4" ry="4" 
+                        class="white-key ${highlightClass}"
+                    />`;
+                    svg.insertAdjacentHTML('beforeend', whiteKey); // White keys go first
+
+                    // Key Label (C keys and A0)
+                    if (key.note === 'C' || key.index === 0) {
+                        keyLabelsHtml.push(
+                            `<text x="${xPos + KEY_WIDTH / 2}" y="${WHITE_KEY_HEIGHT - 10}" text-anchor="middle"
+                                class="text-xs ${labelFillClass} font-mono select-none pointer-events-none transition-colors duration-150">
+                                ${fullNote}
+                            </text>`
+                        );
+                    }
+
+                } else {
+                    // Black Key (collect to render later)
+                    const blackX = xPos + KEY_WIDTH - (BLACK_KEY_WIDTH / 2);
+                    const blackKeyClass = `black-key ${highlightClass}`;
+                    blackKeysHtml.push(
+                        `<rect 
+                            id="key-${key.index}"
+                            x="${blackX}" y="0" width="${BLACK_KEY_WIDTH}" height="${BLACK_KEY_HEIGHT}" 
+                            rx="3" ry="3" 
+                            class="${blackKeyClass}"
+                        />`
+                    );
+                }
+                
+                // --- Function Label Rendering ---
+                if (isHl && !isRoot) {
+                    let x, y, fillClass;
+                    const labelText = noteData.keyboardLabel;
+                    
+                    if (key.isWhite) {
+                        x = xPos + KEY_WIDTH / 2;
+                        y = 25; 
+                        fillClass = isOmitted ? 'fill-purple-500/30' : 'fill-purple-700/80';
+                    } else {
+                        const blackX = xPos + KEY_WIDTH - (BLACK_KEY_WIDTH / 2);
+                        x = blackX + BLACK_KEY_WIDTH / 2;
+                        y = BLACK_KEY_HEIGHT - 10;
+                        fillClass = isOmitted ? 'fill-purple-300/40' : 'fill-purple-300';
+                    }
+                    
+                    functionLabelsHtml.push(
+                        `<text x="${x}" y="${y}" text-anchor="middle"
+                            class="text-sm font-extrabold select-none pointer-events-none z-30"
+                            fill="${fillClass}">
+                            ${labelText}
+                        </text>`
+                    );
+                }
+            }
+            
+            // 3. Render Black Keys, Key Labels, and Function Labels (must be last for z-index)
+            svg.insertAdjacentHTML('beforeend', blackKeysHtml.join(''));
+            svg.insertAdjacentHTML('beforeend', keyLabelsHtml.join(''));
+            svg.insertAdjacentHTML('beforeend', functionLabelsHtml.join(''));
+
+            // Optional: Scroll to center C4
+            const C4_INDEX = KEYBOARD_NOTES.findIndex(k => k.fullNote === 'C4');
+            if (C4_INDEX !== -1) {
+                const whiteKeysBeforeC4 = KEYBOARD_NOTES.slice(0, C4_INDEX).filter(k => k.isWhite).length;
+                const offset = whiteKeysBeforeC4 * KEY_WIDTH;
+                const container = document.getElementById('keyboard-container');
+                // Calculate scroll position to center C4
+                const centerScroll = offset - (container.offsetWidth / 2) + (KEY_WIDTH * 3); // Center on C4, adjust slightly
+                container.scrollLeft = centerScroll;
+            }
+        };
+
+        const renderChordGrid = (primaryChordsInKey) => {
+            const grid = document.getElementById('chord-grid');
+            grid.innerHTML = '';
+
+            primaryChordsInKey.forEach((chordData, index) => {
+                const modifierKey = state.chordModifiers[index];
+                const { name, roman } = getChordDetails(state.selectedKey, state.scaleType, chordData.degree, modifierKey, false);
+
+                const isSelected = index === state.currentChordIndex;
+                const isVDegree = index === 4;
+
+                let backgroundClass = 'bg-gray-700/60 border-gray-700 hover:bg-gray-600/70 backdrop-blur-sm';
+                let borderRingClass = '';
+                let textClass = 'text-gray-400';
+                let subtextClass = 'text-gray-400';
+
+                if (isSelected) {
+                    backgroundClass = 'bg-indigo-600/90 border-indigo-400 ring-4 ring-indigo-500/50 transform scale-[1.03] shadow-indigo-500/30';
+                    textClass = 'text-white';
+                    subtextClass = 'text-indigo-200';
+                } else if (isVDegree) {
+                    backgroundClass = 'bg-emerald-600/60 border-emerald-500/50 hover:bg-emerald-500/70';
+                    borderRingClass = 'ring-2 ring-emerald-500/50';
+                    textClass = 'text-white';
+                    subtextClass = 'text-emerald-200';
+                }
+
+                const buttonHtml = `
+                    <div
+                        data-index="${index}"
+                        class="chord-button p-3 rounded-xl transition-all duration-200 cursor-pointer shadow-xl border-2 text-center h-full ${backgroundClass} ${borderRingClass}"
+                    >
+                        <p class="text-sm font-light uppercase ${subtextClass}">
+                            ${roman} Degree (${modifierKey})
+                        </p>
+                        <h3 class="text-xl font-extrabold truncate ${textClass}">
+                            ${name}
+                        </h3>
+                    </div>
+                `;
+                grid.insertAdjacentHTML('beforeend', buttonHtml);
+            });
+
+            // Attach event listeners to new buttons
+            document.querySelectorAll('.chord-button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const index = parseInt(e.currentTarget.getAttribute('data-index'));
+                    setState({ currentChordIndex: index });
+                });
+            });
+        };
+
+        const renderModifiers = () => {
+            const baseContainer = document.getElementById('base-modifiers-container');
+            const complexContainer = document.getElementById('complex-modifiers-container');
+            baseContainer.innerHTML = '';
+            complexContainer.innerHTML = '';
+
+            const currentModifier = state.chordModifiers[state.currentChordIndex];
+            
+            const renderButton = (container, mod) => {
+                const isActive = currentModifier === mod.key;
+                const buttonHtml = `
+                    <button
+                        data-modifier="${mod.key}"
+                        class="modifier-button px-3 py-1 text-xs sm:text-sm font-medium rounded-full transition-all duration-200 ease-in-out whitespace-nowrap border-2 border-transparent hover:border-indigo-400
+                            ${isActive
+                                ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/50'
+                                : 'bg-gray-700/60 text-gray-300 backdrop-blur-sm hover:bg-gray-600/70'
+                            }
+                        "
+                    >
+                        ${mod.label}
+                    </button>
+                `;
+                container.insertAdjacentHTML('beforeend', buttonHtml);
+            };
+
+            BASE_MODIFIERS.forEach(mod => renderButton(baseContainer, mod));
+            COMPLEX_MODIFIERS.forEach(mod => renderButton(complexContainer, mod));
+
+            // Attach event listeners to new modifier buttons
+            document.querySelectorAll('.modifier-button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const modifierKey = e.currentTarget.getAttribute('data-modifier');
+                    const newModifiers = [...state.chordModifiers];
+                    newModifiers[state.currentChordIndex] = modifierKey;
+                    setState({ chordModifiers: newModifiers });
+                });
+            });
+        };
+
+        const renderInfoDisplay = (details) => {
+            document.getElementById('chord-name-display').textContent = details.name;
+            document.getElementById('inversion-display').textContent = details.inversion;
+            document.getElementById('degree-string-display').textContent = details.degreeString;
+            document.getElementById('absolute-notes-display').textContent = details.highlightNotes.join(' - ');
+        };
+
+        const renderTitle = () => {
+            document.getElementById('scale-title').textContent = `${state.selectedKey} ${state.scaleType} 顺阶和弦`;
+        };
+
+        // --- MAIN RENDER FUNCTION ---
+        
+        const render = () => {
+            renderTitle();
+
+            const qualities = state.scaleType === 'Major' ? MAJOR_CHORD_QUALITIES : MINOR_CHORD_QUALITIES;
+            const primaryChordsInKey = qualities.map((q, degree) => ({
+                degree, triadType: q[0], seventhType: q[1], roman: q[2]
+            }));
+
+            const modifier = state.chordModifiers[state.currentChordIndex];
+            const currentChordDetails = getChordDetails(
+                state.selectedKey, 
+                state.scaleType, 
+                primaryChordsInKey[state.currentChordIndex].degree, 
+                modifier, 
+                state.displayAllOctaves
+            );
+
+            renderPianoKeyboard(currentChordDetails.highlightNotesWithOctave);
+            renderChordGrid(primaryChordsInKey);
+            renderModifiers();
+            renderInfoDisplay(currentChordDetails);
+        };
+
+        // --- STATE & EVENT HANDLING ---
+
+        const setState = (newState) => {
+            // Check if selectedKey or scaleType changes to reset modifiers
+            if (newState.selectedKey !== undefined && newState.selectedKey !== state.selectedKey ||
+                newState.scaleType !== undefined && newState.scaleType !== state.scaleType) {
+                
+                newState.chordModifiers = Array(7).fill('Triad');
+                newState.currentChordIndex = 0;
+            }
+
+            state = { ...state, ...newState };
+            render();
+        };
+
+        const setupEventListeners = () => {
+            // Key Select
+            document.getElementById('key-select').addEventListener('change', (e) => {
+                setState({ selectedKey: e.target.value });
+            });
+
+            // Scale Type Select
+            document.getElementById('scale-type-select').addEventListener('change', (e) => {
+                setState({ scaleType: e.target.value });
+            });
+
+            // Octave Toggle
+            document.getElementById('octave-toggle').addEventListener('change', (e) => {
+                const isChecked = e.target.checked;
+                // Update the visual dot position
+                const dot = e.target.nextElementSibling.nextElementSibling;
+                dot.classList.toggle('translate-x-4', isChecked);
+                dot.classList.toggle('bg-indigo-500', isChecked);
+                dot.classList.toggle('bg-white', !isChecked);
+
+                setState({ displayAllOctaves: isChecked });
+            });
+        };
+
+        // --- INITIALIZATION ---
+        
+        const initialize = () => {
+            // Fill Key Select Options
+            const keySelect = document.getElementById('key-select');
+            KEY_NAMES.forEach(key => {
+                const option = document.createElement('option');
+                option.value = key.value;
+                option.textContent = key.label;
+                keySelect.appendChild(option);
+            });
+
+            setupEventListeners();
+            render(); // Initial render
+        };
+
+        window.onload = initialize;
+    </script>
+</body>
+</html>
