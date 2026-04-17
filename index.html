@@ -1436,6 +1436,10 @@
                             <span class="text-xs uppercase text-gray-400 font-light">· ${roman}</span>
                             <span class="text-xs text-gray-500 font-mono">(级数 ${displayDegree})</span>
                             <h3 class="text-lg font-extrabold text-white">${details.name}</h3>
+                            <span class="text-xs text-gray-400 font-mono tracking-wide"
+                                title="绝对音名 (Notes, 按当前声部顺序)">
+                                · ${details.highlightNotes.join(' - ')}
+                            </span>
                         </div>
                         <div class="flex flex-wrap gap-1 justify-start sm:justify-end">
                             ${modifiersHtml}
