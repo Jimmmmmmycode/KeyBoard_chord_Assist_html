@@ -224,7 +224,10 @@
         ];
 
         const BASE_MODIFIERS = [
-            { key: 'Triad', label: 'Triad (默认三和弦)' }, { key: 'power', label: 'Power (强力和弦 1/5)' }, 
+            { key: 'Triad', label: 'Triad (默认三和弦)' },
+            // 仅在 Major 调的 I / IV / V 级 (currentChordIndex = 0 / 3 / 4) 显示
+            { key: 'minTriad', label: 'Minor Triad (小三和弦)', onlyForMajorDegrees: [0, 3, 4] },
+            { key: 'power', label: 'Power (强力和弦 1/5)' }, 
             { key: '6th', label: 'Sixth (6/m6 - 六和弦)' }, { key: '7th', label: 'Seventh (Maj7/m7/Dom7/ø7 - 七和弦)' },
             { key: '9th', label: 'Ninth (Maj9/m9/Dom9 - 九和弦)' }, { key: 'Aug', label: 'Augmented (+ - 增和弦)' },
             { key: 'Dim', label: 'Diminished (° - 减和弦)' }, { key: 'hdim7', label: 'Half-diminished (ø7 - 半减七和弦)' },
@@ -311,6 +314,7 @@
                 case 'add13': return diatonicTriad === 'min' || diatonicTriad === 'dim' ? 'min-add13' : 'add13';
                 case '11th': return '11th'; 
                 case '13th': return '13th'; 
+                case 'minTriad': return 'min';
                 case 'Triad':
                 default: return diatonicTriad;
             }
@@ -670,7 +674,14 @@
                 container.insertAdjacentHTML('beforeend', buttonHtml);
             };
 
-            BASE_MODIFIERS.forEach(mod => renderButton(baseContainer, mod));
+            BASE_MODIFIERS.forEach(mod => {
+                // 作用域过滤：onlyForMajorDegrees 仅在 Major 调且当前级数匹配时才渲染
+                if (mod.onlyForMajorDegrees) {
+                    if (state.scaleType !== 'Major') return;
+                    if (!mod.onlyForMajorDegrees.includes(state.currentChordIndex)) return;
+                }
+                renderButton(baseContainer, mod);
+            });
             COMPLEX_MODIFIERS.forEach(mod => renderButton(complexContainer, mod));
 
             // Attach event listeners to new modifier buttons
