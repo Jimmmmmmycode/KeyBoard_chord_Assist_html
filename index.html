@@ -63,13 +63,29 @@
 <body class="antialiased bg-gray-900 text-gray-100 p-4 sm:p-8">
 
     <div id="app-container" class="min-h-screen">
-        <header class="text-center mb-10">
-            <h1 class="text-4xl font-extrabold text-indigo-400 mb-2 tracking-tight">
-                🎹 钢琴和弦可视化探索器 (Pure JS)
-            </h1>
-            <p class="text-lg text-gray-400">
-                在 88 键键盘上可视化顺阶和弦和修饰和弦。
-            </p>
+        <header class="relative mb-10">
+            <div class="text-center">
+                <h1 class="text-4xl font-extrabold text-indigo-400 mb-2 tracking-tight">
+                    🎹 钢琴和弦可视化探索器 (Pure JS)
+                </h1>
+                <p class="text-lg text-gray-400">
+                    在 88 键键盘上可视化顺阶和弦和修饰和弦。
+                </p>
+            </div>
+            <!-- Mode Switcher (A: Reference / B: Progression) -->
+            <div id="mode-switcher"
+                class="mt-4 flex md:absolute md:top-0 md:right-0 md:mt-0 justify-center md:justify-end">
+                <div class="inline-flex items-center rounded-full bg-gray-700/60 p-1 shadow-inner border border-gray-700/60">
+                    <button type="button" data-mode="reference"
+                        class="mode-btn px-4 py-1.5 text-sm font-semibold rounded-full transition-all duration-200">
+                        A · 对照
+                    </button>
+                    <button type="button" data-mode="progression"
+                        class="mode-btn px-4 py-1.5 text-sm font-semibold rounded-full transition-all duration-200">
+                        B · 进行
+                    </button>
+                </div>
+            </div>
         </header>
         
         <!-- --- TOP CONTROLS SECTION --- -->
@@ -88,8 +104,8 @@
                 </div>
             </div>
 
-            <!-- Octave Toggle -->
-            <div class="mt-6 pt-4 border-t border-gray-700 flex justify-center">
+            <!-- Display Toggles -->
+            <div class="mt-6 pt-4 border-t border-gray-700 flex flex-wrap justify-center items-center gap-x-8 gap-y-3">
                 <label for="octave-toggle" class="flex items-center space-x-2 cursor-pointer select-none">
                     <span class="text-gray-300 font-medium text-sm">Display Across All Octaves (显示所有八度)</span>
                     <div class="relative">
@@ -98,8 +114,20 @@
                         <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition duration-300 ease-in-out"></div>
                     </div>
                 </label>
+
+                <label for="chord-interval-toggle" class="flex items-center space-x-2 cursor-pointer select-none">
+                    <span class="text-gray-300 font-medium text-sm">Chord Intervals (和弦组成音)</span>
+                    <div class="relative">
+                        <input type="checkbox" id="chord-interval-toggle" class="sr-only">
+                        <div class="block bg-gray-600 w-10 h-6 rounded-full transition duration-300 ease-in-out"></div>
+                        <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition duration-300 ease-in-out"></div>
+                    </div>
+                </label>
             </div>
         </div>
+
+        <!-- ============ REFERENCE VIEW (和弦对照模式) ============ -->
+        <section id="reference-view">
 
         <!-- --- PIANO KEYBOARD & INFO --- -->
         <div class="max-w-6xl mx-auto mb-4 p-2">
@@ -135,7 +163,17 @@
                     <!-- Modifier buttons will be inserted here -->
                 </div>
             </div>
-            
+
+            <!-- Inversions for Selected Chord -->
+            <div class="mt-4 p-4 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-sky-700/30 shadow-inner">
+                <p class="text-gray-400 font-medium mb-3 text-sky-400 font-bold">
+                    转位和弦类型 (Inversions):
+                </p>
+                <div id="inversion-container" class="flex flex-wrap gap-2 justify-start">
+                    <!-- Inversion buttons will be inserted here -->
+                </div>
+            </div>
+
             <!-- Modifiers for Selected Chord: Complex Types (Added 11th and 13th) -->
             <div class="mt-4 p-4 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-rose-700/30 shadow-inner">
                 <p class="text-gray-400 font-medium mb-3 text-rose-400 font-bold">
@@ -218,6 +256,48 @@
             </div>
         </div>
 
+        </section>
+        <!-- ============ END REFERENCE VIEW ============ -->
+
+        <!-- ============ PROGRESSION VIEW (和弦进行模式) ============ -->
+        <section id="progression-view" class="hidden">
+
+            <!-- Progression Input Area -->
+            <div class="max-w-6xl mx-auto bg-gray-800/50 backdrop-blur-md p-4 sm:p-6 rounded-xl shadow-2xl mb-6 border border-teal-700/30">
+                <p class="text-teal-400 font-bold mb-3">和弦进行 (Chord Progression)</p>
+                <div class="flex flex-col md:flex-row gap-3 md:items-start">
+                    <!-- Text input + Apply -->
+                    <div class="flex-1 min-w-0">
+                        <div class="flex gap-2">
+                            <input id="progression-input" type="text"
+                                placeholder="例如: 1-6-4-5 或 1-5/7-6-5 (最多 10 步, 支持斜杠和弦如 5/7 = V 第一转位)"
+                                class="flex-1 min-w-0 bg-gray-700/70 border border-teal-600/50 text-gray-200 rounded-lg p-2.5 shadow-inner focus:ring-teal-500 focus:border-teal-500 transition-colors font-mono tracking-wider" />
+                            <button id="progression-apply" type="button"
+                                class="px-4 py-2 rounded-lg bg-teal-500 text-white font-semibold shadow-lg shadow-teal-500/30 hover:bg-teal-400 transition-colors whitespace-nowrap">
+                                Apply
+                            </button>
+                        </div>
+                        <p id="progression-error" class="mt-1 text-xs text-red-400 hidden">—</p>
+                    </div>
+                    <!-- Preset dropdown -->
+                    <div class="md:w-64 shrink-0">
+                        <select id="progression-preset"
+                            class="w-full bg-gray-700/70 border border-teal-600/50 text-gray-200 rounded-lg p-2.5 shadow-inner focus:ring-teal-500 focus:border-teal-500 transition-colors">
+                            <!-- Options filled by JS -->
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">选择预设 (Presets)</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progression Steps Container -->
+            <div id="progression-steps" class="max-w-6xl mx-auto space-y-3">
+                <!-- Step cards inserted by JS -->
+            </div>
+
+        </section>
+        <!-- ============ END PROGRESSION VIEW ============ -->
+
         <footer class="mt-12 text-center text-sm text-gray-500">
             <p>© 2024 Visual Piano Chord Explorer. Built with Vanilla JS & Tailwind CSS.</p>
         </footer>
@@ -277,8 +357,16 @@
             { key: 'Triad', label: 'Triad (默认三和弦)' },
             // 仅在 Major 调的 I / IV / V 级 (currentChordIndex = 0 / 3 / 4) 显示
             { key: 'minTriad', label: 'Minor Triad (小三和弦)', onlyForMajorDegrees: [0, 3, 4] },
-            { key: 'power', label: 'Power (强力和弦 1/5)' }, 
+            // 仅在 Major 调的 ii / iii / vi 级 (currentChordIndex = 1 / 2 / 5) 显示，
+            // 用于"借用"/次属功能前的大三和弦音色
+            { key: 'majTriad', label: 'Major Triad (大三和弦)', onlyForMajorDegrees: [1, 2, 5] },
+            { key: 'power', label: 'Power (强力和弦 1/5)' },
             { key: '6th', label: 'Sixth (6/m6 - 六和弦)' }, { key: '7th', label: 'Seventh (Maj7/m7/Dom7/ø7 - 七和弦)' },
+            // 仅在 Major 调的 I / IV / V 级显示，用于"借用"小七和弦音色
+            { key: 'minSeventh', label: 'Minor 7th (小七和弦)', onlyForMajorDegrees: [0, 3, 4] },
+            // 仅在 Major 调的 ii / iii / vi 级显示 — 即把原本的 ii / iii / vi 变成
+            // 指向下一个目标级的"次属七和弦" (V7/next)，用于对比借听
+            { key: 'dom7', label: 'Dom 7th (属七和弦)', onlyForMajorDegrees: [1, 2, 5] },
             { key: '9th', label: 'Ninth (Maj9/m9/Dom9 - 九和弦)' }, { key: 'Aug', label: 'Augmented (+ - 增和弦)' },
             { key: 'Dim', label: 'Diminished (° - 减和弦)' }, { key: 'hdim7', label: 'Half-diminished (ø7 - 半减七和弦)' },
             { key: 'sus2', label: 'Sus2 (挂留二度)' }, { key: 'sus4', label: 'Sus4 (挂留四度)' },
@@ -289,6 +377,34 @@
             { key: 'add11', label: 'Add11 (附加十一度)' }, { key: 'add13', label: 'Add13 (附加十三度)' },
             { key: '11th', label: '11th (十一度和弦)' }, { key: '13th', label: '13th (十三度和弦)' },
         ];
+
+        // Inversion options. Each inversion moves `value` bass notes up one
+        // octave. `minNotes` guards against applying an inversion to a chord
+        // with too few notes (e.g. Power chord has only 2 notes → 2nd inv N/A).
+        const INVERSIONS = [
+            { value: 0, label: '原位 (Root Position)',     display: 'Root Position (原位)',    minNotes: 1 },
+            { value: 1, label: '第一转位 (1st Inversion)', display: '1st Inversion (第一转位)', minNotes: 2 },
+            { value: 2, label: '第二转位 (2nd Inversion)', display: '2nd Inversion (第二转位)', minNotes: 3 },
+            // 3rd inversion is ONLY meaningful for 4-note chords (7ths). We
+            // skip rendering the button (and ignore any stored value) for
+            // triads / power chords / 9ths+ to keep the UI strict and clean.
+            { value: 3, label: '第三转位 (3rd Inversion)', display: '3rd Inversion (第三转位)', exactNotes: 4 },
+        ];
+
+        // Enforce inversion validity in a single place shared by the info
+        // panel (getChordDetails) and the button renderer (renderInversions):
+        //   - never negative;
+        //   - never exceed (noteCount - 1);
+        //   - 3rd inversion is reserved for 4-note chords; any stored value
+        //     of 3 on a non-4-note chord silently clamps to at most 2.
+        const clampInversion = (rawInversion, chordNoteCount) => {
+            const n = Math.max(0, rawInversion | 0);
+            const hardCap = Math.max(0, (chordNoteCount || 0) - 1);
+            if (n >= 3 && chordNoteCount !== 4) {
+                return Math.min(2, hardCap);
+            }
+            return Math.min(n, hardCap);
+        };
         
         const SCALE_FORMULAS = {
             'Major': [0, 2, 4, 5, 7, 9, 11],
@@ -307,20 +423,99 @@
         // Find the index of C5 (Octave 5) for voicing 13th chords
         const C5_INDEX = KEYBOARD_NOTES.findIndex(k => k.fullNote === 'C5');
 
+        // Common sub-ranges used by the keyboard renderer (both inclusive,
+        // index into KEYBOARD_NOTES). C3..C6 covers all diatonic voicings
+        // plus 13th chord extensions (root@C4 + up to 21 semitones).
+        const C3_INDEX = KEYBOARD_NOTES.findIndex(k => k.fullNote === 'C3');
+        const C6_INDEX = KEYBOARD_NOTES.findIndex(k => k.fullNote === 'C6');
+
+
+        // Common chord progression presets. The first entry is the default.
+        // Each `tokens` entry is a raw textual step — `"5"` for a diatonic
+        // triad on scale degree 5, `"5/7"` for the same chord with scale
+        // degree 7 in the bass (first inversion of V). `parseProgressionInput`
+        // handles both shapes. Names are deliberately omitted from the UI
+        // because they tend to be stylistic / debatable rather than
+        // technically accurate.
+        const PROGRESSION_PRESETS = [
+            { tokens: ['1', '6', '4', '5'] },
+            { tokens: ['1', '3', '4', '5'] },
+            { tokens: ['1', '5/7', '6', '5', '4', '3', '2', '5'] },
+            { tokens: ['1', '4', '5'] },
+            { tokens: ['2', '5', '1'] },
+            { tokens: ['1', '6', '2', '5'] },
+            { tokens: ['6', '4', '1', '5'] },
+            { tokens: ['4', '3', '2', '1'] },
+            { tokens: ['4', '5', '3', '6', '2', '5', '1'] },
+        ];
+        const PROGRESSION_MIN = 1;
+        const PROGRESSION_MAX = 10;
 
         // --- STATE MANAGEMENT ---
         let state = {
+            // App-level mode: 'reference' (和弦对照, default) or 'progression' (和弦进行)
+            appMode: 'reference',
+
+            // Shared top controls
             selectedKey: 'C',
             scaleType: 'Major',
-            currentChordIndex: 0,
             displayAllOctaves: false,
+            // When false (default): keyboard labels use 首调音级 (relative to
+            // the selected key's tonic — "2/4/6" for a ii chord in C Major).
+            // When true: labels revert to chord-internal intervals with the
+            // chord root as "1" (a ii chord reads "1/b3/5" regardless of key).
+            // Only the per-key small digits on the piano are affected; the
+            // info strip, chord name and inversion slash stay key-relative.
+            chordRelativeLabels: false,
+
+            // --- Reference mode state ---
+            currentChordIndex: 0,
             // Initialize 7 diatonic chords to Triad modifier
             chordModifiers: Array(7).fill('Triad'), 
+            // Per-degree chord inversion (0 = Root, 1 = 1st inv, 2 = 2nd inv)
+            chordInversions: Array(7).fill(0),
             // Collapsible Secondary ii-V-I panel
             secondary251Expanded: false,
             // Which secondary chord (if any) is currently previewed on the keyboard
             // null => show primary chord; 'ii' => preview secondary ii; 'V' => preview secondary V
             previewSecondary: null,
+
+            // --- Progression mode state ---
+            progression: (() => {
+                // Seed from the first preset. We re-implement the bare minimum
+                // of token parsing here (root / slash-chord → degree+inversion)
+                // because `parseProgressionTokens` is declared later in this
+                // script (const — not hoisted). Keep this in sync with the
+                // full parser below. Presets are assumed valid at author time.
+                const tokens = PROGRESSION_PRESETS[0].tokens;
+                const degrees = [];
+                const inversions = [];
+                for (const t of tokens) {
+                    const [a, b] = t.split('/');
+                    const d = parseInt(a, 10) - 1;
+                    degrees.push(d);
+                    if (b === undefined) {
+                        inversions.push(0);
+                    } else {
+                        const bZero = parseInt(b, 10) - 1;
+                        const triad = [d % 7, (d + 2) % 7, (d + 4) % 7];
+                        const idx = triad.indexOf(bZero);
+                        inversions.push(idx === -1 ? 0 : idx);
+                    }
+                }
+                return {
+                    // 0-indexed scale degrees (display 1..7 - 1)
+                    degrees,
+                    // One modifier per step (same vocabulary as BASE_MODIFIERS keys)
+                    modifiers: degrees.map(() => 'Triad'),
+                    // One inversion level per step (0 = Root .. 3 = 3rd Inv).
+                    // Slash-chord tokens ("5/7") seed an inversion here.
+                    // Reset to 0 on key/scale change or when Apply/preset
+                    // replaces degrees. Modifier changes preserve the value
+                    // and rely on clampInversion at render time.
+                    inversions,
+                };
+            })(),
         };
 
         // --- UTILITY FUNCTIONS ---
@@ -349,6 +544,19 @@
             }
         };
 
+        // Key-relative "movable-do" scale-degree label.
+        // Input: any signed semitone delta from the key's tonic.
+        // Output: 1..7 folded into a single octave, with flats-first accidentals
+        // for non-diatonic notes (matches jazz/Nashville convention where the
+        // natural minor scale reads as 1, 2, b3, 4, 5, b6, b7).
+        const SCALE_DEGREE_LABELS = [
+            '1', 'b2', '2', 'b3', '3', '4', 'b5', '5', 'b6', '6', 'b7', '7'
+        ];
+        const semitoneToKeyDegree = (semitones) => {
+            const s = ((semitones % 12) + 12) % 12;
+            return SCALE_DEGREE_LABELS[s];
+        };
+
         const getIntervalKey = (diatonicTriad, diatonicSeventh, modifier) => {
             switch (modifier) {
                 case 'power': return 'power';
@@ -370,6 +578,9 @@
                 case '11th': return '11th'; 
                 case '13th': return '13th'; 
                 case 'minTriad': return 'min';
+                case 'minSeventh': return 'min7';
+                case 'majTriad': return 'Triad';
+                case 'dom7': return '7th';
                 case 'Triad':
                 default: return diatonicTriad;
             }
@@ -394,7 +605,7 @@
             return notes.map(note => toDisplayNote(note, useFlats));
         };
 
-        const getChordDetails = (root, scaleType, degree, modifier, displayAllOctaves) => {
+        const getChordDetails = (root, scaleType, degree, modifier, displayAllOctaves, inversion = 0, chordRelativeLabels = false) => {
             const scaleNotes = getScaleNotes(root, scaleType);
             const qualities = scaleType === 'Major' ? MAJOR_CHORD_QUALITIES : MINOR_CHORD_QUALITIES;
             const [diatonicTriad, diatonicSeventh, romanNumeral] = qualities[degree];
@@ -407,11 +618,15 @@
             if (finalIntervalKey === '11th') { omittedIntervals.push(4, 7); } 
             else if (finalIntervalKey === '13th') { omittedIntervals.push(4, 7, 17); }
 
-            const degreeString = intervals.map(intervalToDegree).join(' - ');
+            // Tonic of the selected key — used below for key-relative
+            // ("首调音级") scale-degree labels shown in the info strip and on
+            // each highlighted keyboard key. Chord-relative intervals are no
+            // longer surfaced to the user.
+            const tonicIndex = getChromaticIndex(root);
             const chordRootNote_Sharp = ALL_NOTES_SHARP[chordRoot011Index];
             let rootKeyIndex_88 = KEYBOARD_NOTES.findIndex(k => k.note === chordRootNote_Sharp && k.octave === 4);
             if (rootKeyIndex_88 === -1) { rootKeyIndex_88 = KEYBOARD_NOTES.findIndex(k => k.note === chordRootNote_Sharp); }
-            if (rootKeyIndex_88 === -1) { return { name: 'N/A', highlightNotes: [], highlightNotesWithOctave: [], degreeString: 'N/A', inversion: 'Root Position (原位)' }; }
+            if (rootKeyIndex_88 === -1) { return { name: 'N/A', highlightNotes: [], highlightNotesWithOctave: [], degreeString: 'N/A', inversion: 'Root Position (原位)', inversionValue: 0, chordNoteCount: 0 }; }
 
             let baseChordNotes = [];
             baseChordNotes.push(KEYBOARD_NOTES[rootKeyIndex_88]);
@@ -438,6 +653,20 @@
                 }
             }
 
+            // Apply inversion by moving the bottom `effectiveInversion` notes
+            // up by one octave (+12 keyboard indices). `clampInversion` also
+            // rejects 3rd-inversion requests for non-4-note chords.
+            const effectiveInversion = clampInversion(inversion, baseChordNotes.length);
+            if (effectiveInversion > 0) {
+                const moved = [];
+                for (let i = 0; i < effectiveInversion; i++) {
+                    const orig = baseChordNotes[i];
+                    const newIdx = orig.index + 12;
+                    moved.push(newIdx < 88 ? KEYBOARD_NOTES[newIdx] : orig);
+                }
+                baseChordNotes = [...baseChordNotes.slice(effectiveInversion), ...moved];
+            }
+
             const targetIntervalIndices = fullIntervals.map(i => normalizeIndex(chordRoot011Index + i));
             let notesToHighlight = displayAllOctaves ?
                 KEYBOARD_NOTES.filter(key => targetIntervalIndices.includes(getChromaticIndex(key.note)))
@@ -450,15 +679,26 @@
 
                 if (scaleNoteAtIndex) { displayNote = scaleNoteAtIndex; }
 
+                // Chord-relative interval is still needed for two things:
+                //   (1) flagging "omitted" guide tones on extended chords,
+                //   (2) marking which key IS the chord root (orange highlight).
+                // But the user-facing label on the keyboard is now key-relative
+                // (scale degree in the selected key).
                 const intervalFromRoot = normalizeIndex(noteIndex - chordRoot011Index);
                 let functionIntervalValue = fullIntervals.find(i => normalizeIndex(i) === intervalFromRoot);
                 if (functionIntervalValue === undefined) {
                      functionIntervalValue = fullIntervals.find(i => normalizeIndex(i % 12) === intervalFromRoot);
                 }
                 const isOmitted = omittedIntervals.includes(functionIntervalValue);
-                const functionLabel = intervalToDegree(functionIntervalValue !== undefined ? functionIntervalValue : intervalFromRoot);
-                const keyboardLabel = functionLabel.replace(/\(=.*\)/, '');
-                
+                // Keyboard digit label:
+                //   - default (key-relative "首调音级"): uses selected key's
+                //     tonic as "1" — e.g. Dm in C Major → 2 / 4 / 6.
+                //   - chordRelativeLabels=true ("和弦组成音"): uses the chord's
+                //     own root as "1" — e.g. Dm always reads 1 / b3 / 5,
+                //     Cm in C Major also reads 1 / b3 / 5.
+                const labelReferenceIndex = chordRelativeLabels ? chordRoot011Index : tonicIndex;
+                const keyboardLabel = semitoneToKeyDegree(noteIndex - labelReferenceIndex);
+
                 return {
                     fullNote: n.fullNote,
                     keyboardIndex: n.index,
@@ -495,13 +735,71 @@
             else if (finalIntervalKey === '11th') suffix = '11';
             else if (finalIntervalKey === '13th') suffix = '13';
 
-            const chordName = `${chordRootNote}${suffix}`;
+            const baseChordName = `${chordRootNote}${suffix}`;
             const highlightNotes = highlightNotesWithOctave.map(n => n.displayNote).filter((v, i, a) => a.indexOf(v) === i);
+
+            // Root-position, key-relative labels for every chord tone (one
+            // entry per interval, kept in ascending chord-interval order).
+            // This is the canonical sequence we rotate / re-reference below
+            // whenever an inversion is applied.
+            //   C Major, Dm → ["2", "4", "6"]
+            //   C Major, G7 → ["5", "7", "2", "4"]
+            //   C Major, Cm → ["1", "b3", "5"]
+            const rootPositionLabels = fullIntervals.map(interval =>
+                semitoneToKeyDegree(chordRoot011Index + interval - tonicIndex)
+            );
+
+            // Voicing-order labels: rotate so the bass-degree leads. A triad
+            // in 1st inversion reads 3 - 5 - 1, a 7th in 2nd inversion reads
+            // 5 - 7 - 1 - 3, etc. Dedupe only AFTER rotation so the bass
+            // always appears first.
+            const rotatedLabels =
+                (effectiveInversion > 0 && effectiveInversion < rootPositionLabels.length)
+                    ? [...rootPositionLabels.slice(effectiveInversion),
+                       ...rootPositionLabels.slice(0, effectiveInversion)]
+                    : rootPositionLabels;
+            const seenLabels = new Set();
+            const degreeString = rotatedLabels
+                .filter(l => !seenLabels.has(l) && (seenLabels.add(l), true))
+                .join(' - ');
+
+            // Slash-chord name for non-root inversions. Computed directly
+            // from the post-inversion voicing's bass key using absolute note
+            // names:
+            //   1) Start from the keyboard's raw sharp-based spelling (e.g. "D#").
+            //   2) Prefer a matching note inside the selected scale so the
+            //      spelling lines up with the rest of the chord ("Eb" if the
+            //      key is Eb major; "E" for C major's 1st inv of I, etc.).
+            //   3) Fall back to the key's flat/sharp preference for borrowed
+            //      chords whose bass isn't diatonic (e.g. Cm/Eb in C major).
+            let chordName = baseChordName;
+            let inversionText =
+                (INVERSIONS.find(inv => inv.value === effectiveInversion) || INVERSIONS[0]).display;
+            if (effectiveInversion > 0 && baseChordNotes.length > effectiveInversion) {
+                const bassNoteSharp = baseChordNotes[0].note;
+                const bassChromaticIndex = getChromaticIndex(bassNoteSharp);
+                const scaleMatch = scaleNotes.find(
+                    s => getChromaticIndex(s) === bassChromaticIndex
+                );
+                const useFlats = FLAT_KEYS.includes(root);
+                const bassDisplay = scaleMatch || toDisplayNote(bassNoteSharp, useFlats);
+                chordName = `${baseChordName}/${bassDisplay}`;
+
+                // Append the key-relative degree version of the slash —
+                // e.g. "1st Inversion (第一转位) · 1/3" — so users can see
+                // both the absolute bass note (in chordName) and the
+                // functional bass degree (here) at a glance.
+                const rootDegree = rootPositionLabels[0];
+                const bassDegree = rootPositionLabels[effectiveInversion] || rootDegree;
+                inversionText = `${inversionText} · ${rootDegree}/${bassDegree}`;
+            }
 
             return {
                 name: chordName,
                 roman: romanNumeral,
-                inversion: 'Root Position (原位)',
+                inversion: inversionText,
+                inversionValue: effectiveInversion,
+                chordNoteCount: intervals.length,
                 highlightNotesWithOctave,
                 degreeString: degreeString,
                 highlightNotes: highlightNotes,
@@ -513,7 +811,17 @@
         // Shared voicing helper: maps an abstract chord (root chromatic index +
         // interval list) onto the 88-key keyboard, producing the same
         // `highlightNotesWithOctave` shape used by renderPianoKeyboard.
-        const voiceChordOnKeyboard = (rootChromaticIndex, intervals, displayAllOctaves, useFlats) => {
+        // `tonicIndex` drives the key-relative ("首调音级") keyboard labels.
+        // If not provided we fall back to labeling relative to the chord root
+        // itself — this preserves behaviour for callers that pre-date the
+        // movable-do refactor.
+        const voiceChordOnKeyboard = (rootChromaticIndex, intervals, displayAllOctaves, useFlats, tonicIndex = null, chordRelativeLabels = false) => {
+            // With `chordRelativeLabels` on, we force labels to be chord-internal
+            // (root = 1) by ignoring the passed-in tonic. Otherwise labels are
+            // key-relative against the main key's tonic (首调音级).
+            const labelTonicIndex = chordRelativeLabels
+                ? rootChromaticIndex
+                : (tonicIndex ?? rootChromaticIndex);
             const rootSharp = ALL_NOTES_SHARP[rootChromaticIndex];
             let rootKeyIndex_88 = KEYBOARD_NOTES.findIndex(k => k.note === rootSharp && k.octave === 4);
             if (rootKeyIndex_88 === -1) rootKeyIndex_88 = KEYBOARD_NOTES.findIndex(k => k.note === rootSharp);
@@ -551,7 +859,7 @@
                 const intervalFromRoot = normalizeIndex(noteIndex - rootChromaticIndex);
                 const functionIntervalValue =
                     fullIntervals.find(i => normalizeIndex(i) === intervalFromRoot) ?? intervalFromRoot;
-                const keyboardLabel = intervalToDegree(functionIntervalValue).replace(/\(=.*\)/, '');
+                const keyboardLabel = semitoneToKeyDegree(noteIndex - labelTonicIndex);
                 return {
                     fullNote: n.fullNote,
                     keyboardIndex: n.index,
@@ -571,6 +879,10 @@
         const getSecondary251Details = (targetRootNote) => {
             const targetIndex = getChromaticIndex(targetRootNote);
             const useFlats = FLAT_KEYS.includes(state.selectedKey);
+            // Secondary chords are "out of key" by design, but we still want
+            // their degrees / keyboard labels referenced to the MAIN key's
+            // tonic so the user sees how each note relates to the home scale.
+            const mainTonicIndex = getChromaticIndex(state.selectedKey);
 
             const buildChord = (offsetSemitones, intervalKey, suffix) => {
                 const rootIdx = normalizeIndex(targetIndex + offsetSemitones);
@@ -579,9 +891,19 @@
                 const notesArr = intervals.map(i =>
                     toDisplayNote(ALL_NOTES_SHARP[normalizeIndex(rootIdx + i)], useFlats)
                 );
-                const degrees = intervals.map(intervalToDegree).join(' - ');
+                // Dedupe while preserving order so e.g. a chord tone that
+                // collides with the tonic (b7 that lands on "1") only shows
+                // once in the degree strip.
+                const seen = new Set();
+                const keyDegrees = [];
+                for (const i of intervals) {
+                    const label = semitoneToKeyDegree(rootIdx + i - mainTonicIndex);
+                    if (!seen.has(label)) { seen.add(label); keyDegrees.push(label); }
+                }
+                const degrees = keyDegrees.join(' - ');
                 const highlightNotesWithOctave = voiceChordOnKeyboard(
-                    rootIdx, intervals, state.displayAllOctaves, useFlats
+                    rootIdx, intervals, state.displayAllOctaves, useFlats,
+                    mainTonicIndex, state.chordRelativeLabels
                 );
                 return {
                     name: rootName + suffix,
@@ -604,20 +926,40 @@
 
         // --- DOM RENDERING FUNCTIONS ---
 
-        const renderPianoKeyboard = (highlightedNotesWithOctave) => {
-            const svg = document.getElementById('piano-svg');
+        // Default dimensions for reference mode; progression mode passes a
+        // compact set via `opts` for denser vertical stacking.
+        // startIndex/endIndex restrict the rendered key range (inclusive). Both
+        // endpoints must land on a white key so black-key positioning remains
+        // well-defined. Default spans all 88 keys (A0..C8).
+        const PIANO_OPTS_DEFAULT = {
+            keyWidth: 40,
+            whiteHeight: 200,
+            blackHeight: 120,
+            keyLabelSize: 12,      // px
+            funcLabelSize: 14,     // px
+            funcLabelWhiteY: 25,   // y offset from top for function labels on white keys
+            autoScrollToC4: true,
+            startIndex: 0,
+            endIndex: 87,
+        };
+
+        const renderPianoKeyboard = (svg, container, highlightedNotesWithOctave, opts) => {
+            const O = { ...PIANO_OPTS_DEFAULT, ...(opts || {}) };
             svg.innerHTML = ''; // Clear previous keys
-            
-            const KEY_WIDTH = 40;
+
+            const KEY_WIDTH = O.keyWidth;
             const BLACK_KEY_WIDTH = KEY_WIDTH * 0.6;
-            const BLACK_KEY_HEIGHT = 120;
-            const WHITE_KEY_HEIGHT = 200;
+            const BLACK_KEY_HEIGHT = O.blackHeight;
+            const WHITE_KEY_HEIGHT = O.whiteHeight;
+            const START = Math.max(0, O.startIndex);
+            const END = Math.min(87, O.endIndex);
 
             const whiteKeyMap = {};
             let currentX = 0;
 
-            // 1. Calculate White Key positions
-            for (const key of KEYBOARD_NOTES) {
+            // 1. Calculate White Key positions (only within the active range)
+            for (let i = START; i <= END; i++) {
+                const key = KEYBOARD_NOTES[i];
                 if (key.isWhite) {
                     whiteKeyMap[key.index] = { xPos: currentX };
                     currentX += KEY_WIDTH;
@@ -633,8 +975,9 @@
             const keyLabelsHtml = [];
             const functionLabelsHtml = [];
 
-            // 2. Render all 88 keys
-            for (const key of KEYBOARD_NOTES) {
+            // 2. Render keys within [START, END]
+            for (let i = START; i <= END; i++) {
+                const key = KEYBOARD_NOTES[i];
                 const fullNote = key.fullNote;
                 
                 let xPos;
@@ -687,7 +1030,8 @@
                     if (key.note === 'C' || key.index === 0) {
                         keyLabelsHtml.push(
                             `<text x="${xPos + KEY_WIDTH / 2}" y="${WHITE_KEY_HEIGHT - 10}" text-anchor="middle"
-                                class="text-xs ${labelFillClass} font-mono select-none pointer-events-none transition-colors duration-150">
+                                style="font-size: ${O.keyLabelSize}px"
+                                class="${labelFillClass} font-mono select-none pointer-events-none transition-colors duration-150">
                                 ${fullNote}
                             </text>`
                         );
@@ -708,24 +1052,37 @@
                 }
                 
                 // --- Function Label Rendering ---
-                if (isHl && !isRoot) {
+                // Render the key-relative scale-degree on EVERY highlighted
+                // key, including the chord root. The root uses a white label
+                // for strong contrast against the red key fill, non-root
+                // tones keep the purple palette.
+                if (isHl) {
                     let x, y, fillClass;
                     const labelText = noteData.keyboardLabel;
-                    
+
                     if (key.isWhite) {
                         x = xPos + KEY_WIDTH / 2;
-                        y = 25; 
-                        fillClass = isOmitted ? 'fill-purple-500/30' : 'fill-purple-700/80';
+                        y = O.funcLabelWhiteY;
+                        if (isRoot) {
+                            fillClass = 'fill-white';
+                        } else {
+                            fillClass = isOmitted ? 'fill-purple-500/30' : 'fill-purple-700/80';
+                        }
                     } else {
                         const blackX = xPos + KEY_WIDTH - (BLACK_KEY_WIDTH / 2);
                         x = blackX + BLACK_KEY_WIDTH / 2;
                         y = BLACK_KEY_HEIGHT - 10;
-                        fillClass = isOmitted ? 'fill-purple-300/40' : 'fill-purple-300';
+                        if (isRoot) {
+                            fillClass = 'fill-white';
+                        } else {
+                            fillClass = isOmitted ? 'fill-purple-300/40' : 'fill-purple-300';
+                        }
                     }
                     
                     functionLabelsHtml.push(
                         `<text x="${x}" y="${y}" text-anchor="middle"
-                            class="text-sm font-extrabold select-none pointer-events-none z-30"
+                            style="font-size: ${O.funcLabelSize}px"
+                            class="font-extrabold select-none pointer-events-none z-30"
                             fill="${fillClass}">
                             ${labelText}
                         </text>`
@@ -738,15 +1095,19 @@
             svg.insertAdjacentHTML('beforeend', keyLabelsHtml.join(''));
             svg.insertAdjacentHTML('beforeend', functionLabelsHtml.join(''));
 
-            // Optional: Scroll to center C4
-            const C4_INDEX = KEYBOARD_NOTES.findIndex(k => k.fullNote === 'C4');
-            if (C4_INDEX !== -1) {
-                const whiteKeysBeforeC4 = KEYBOARD_NOTES.slice(0, C4_INDEX).filter(k => k.isWhite).length;
-                const offset = whiteKeysBeforeC4 * KEY_WIDTH;
-                const container = document.getElementById('keyboard-container');
-                // Calculate scroll position to center C4
-                const centerScroll = offset - (container.offsetWidth / 2) + (KEY_WIDTH * 3); // Center on C4, adjust slightly
-                container.scrollLeft = centerScroll;
+            // Optional: Scroll to center C4 inside the provided container.
+            // Counted relative to START so the offset is correct when the
+            // rendered range is a sub-window of the 88-key array.
+            if (O.autoScrollToC4 && container) {
+                const C4_INDEX = KEYBOARD_NOTES.findIndex(k => k.fullNote === 'C4');
+                if (C4_INDEX !== -1 && C4_INDEX >= START && C4_INDEX <= END) {
+                    const whiteKeysBeforeC4 = KEYBOARD_NOTES
+                        .slice(START, C4_INDEX)
+                        .filter(k => k.isWhite).length;
+                    const offset = whiteKeysBeforeC4 * KEY_WIDTH;
+                    const centerScroll = offset - (container.offsetWidth / 2) + (KEY_WIDTH * 3);
+                    container.scrollLeft = Math.max(0, centerScroll);
+                }
             }
         };
 
@@ -756,7 +1117,15 @@
 
             primaryChordsInKey.forEach((chordData, index) => {
                 const modifierKey = state.chordModifiers[index];
-                const { name, roman } = getChordDetails(state.selectedKey, state.scaleType, chordData.degree, modifierKey, false);
+                // Forward the per-degree inversion so the selected tile's
+                // chord-name mirrors the main display (e.g. "C/E" for the
+                // first inversion of I). Non-selected tiles hold inversion 0
+                // by our setState reset rule, so they stay at root-position.
+                const inversion = state.chordInversions[index] || 0;
+                const { name, roman } = getChordDetails(
+                    state.selectedKey, state.scaleType,
+                    chordData.degree, modifierKey, false, inversion
+                );
 
                 const isSelected = index === state.currentChordIndex;
                 const isVDegree = index === 4;
@@ -849,6 +1218,54 @@
             });
         };
 
+        // Render inversion buttons (Root / 1st / 2nd) for the currently
+        // selected chord. A button is visually disabled when the current
+        // chord voicing does not have enough notes for that inversion
+        // (e.g. Power chord = 2 notes → 2nd inv disabled).
+        const renderInversions = (chordNoteCount) => {
+            const container = document.getElementById('inversion-container');
+            if (!container) return;
+            container.innerHTML = '';
+
+            const rawInversion = state.chordInversions[state.currentChordIndex] || 0;
+            const effectiveInversion = clampInversion(rawInversion, chordNoteCount);
+
+            INVERSIONS.forEach(inv => {
+                // Skip entirely when a strict exact-note requirement isn't
+                // met (3rd inversion only renders for 4-note chords).
+                if (inv.exactNotes !== undefined && chordNoteCount !== inv.exactNotes) return;
+
+                const isActive = effectiveInversion === inv.value;
+                const isDisabled = inv.minNotes !== undefined && (chordNoteCount || 0) < inv.minNotes;
+                const activeCls = isActive
+                    ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/50'
+                    : 'bg-gray-700/60 text-gray-300 backdrop-blur-sm hover:bg-gray-600/70';
+                const disabledCls = isDisabled
+                    ? 'opacity-40 cursor-not-allowed pointer-events-none'
+                    : 'hover:border-indigo-400';
+                const html = `
+                    <button
+                        data-inversion="${inv.value}"
+                        ${isDisabled ? 'disabled' : ''}
+                        class="inversion-button px-3 py-1 text-xs sm:text-sm font-medium rounded-full transition-all duration-200 ease-in-out whitespace-nowrap border-2 border-transparent ${disabledCls} ${activeCls}"
+                    >
+                        ${inv.label}
+                    </button>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+            });
+
+            container.querySelectorAll('.inversion-button').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    if (e.currentTarget.hasAttribute('disabled')) return;
+                    const value = parseInt(e.currentTarget.getAttribute('data-inversion'), 10) || 0;
+                    const newInversions = [...state.chordInversions];
+                    newInversions[state.currentChordIndex] = value;
+                    setState({ chordInversions: newInversions });
+                });
+            });
+        };
+
         const renderInfoDisplay = (details) => {
             document.getElementById('chord-name-display').textContent = details.name;
             document.getElementById('inversion-display').textContent = details.inversion;
@@ -909,9 +1326,290 @@
             }
         };
 
+        // --- PROGRESSION MODE RENDERING ---
+
+        // Compact piano dimensions for the progression steps.
+        const PROGRESSION_PIANO_OPTS = {
+            keyWidth: 28,
+            whiteHeight: 120,
+            blackHeight: 72,
+            keyLabelSize: 10,
+            funcLabelSize: 10,
+            funcLabelWhiteY: 16,
+            autoScrollToC4: true,
+        };
+
+        // Compute the piano range for progression steps based on the shared
+        // octave toggle. When "Display Across All Octaves" is on, we must show
+        // the full 88-key range so every highlight is visible; otherwise we
+        // restrict to C3..C6 — enough to cover every diatonic voicing plus the
+        // 13th chord extension (root@C4 + up to 21 semitones), while cutting
+        // SVG node count from ~88 to ~37 per step for faster rendering.
+        const getProgressionPianoOpts = () => {
+            const opts = { ...PROGRESSION_PIANO_OPTS };
+            if (!state.displayAllOctaves) {
+                opts.startIndex = C3_INDEX;
+                opts.endIndex = C6_INDEX;
+            }
+            return opts;
+        };
+
+        // Romans for the 7 diatonic degrees (reused for labeling steps).
+        const getRomanForDegree = (degreeIndex) => {
+            const qualities = state.scaleType === 'Major' ? MAJOR_CHORD_QUALITIES : MINOR_CHORD_QUALITIES;
+            return qualities[degreeIndex][2];
+        };
+
+        const renderProgressionStepCard = (stepIdx, degreeIdx, modifierKey, inversionValue = 0) => {
+            const details = getChordDetails(
+                state.selectedKey, state.scaleType,
+                degreeIdx, modifierKey, state.displayAllOctaves,
+                inversionValue, state.chordRelativeLabels
+            );
+            const roman = getRomanForDegree(degreeIdx);
+            const displayDegree = degreeIdx + 1; // 1-indexed for user display
+            // Clamp once per render for the active-button styling — the raw
+            // state value may reference an inversion that the current chord
+            // can no longer satisfy (e.g. 3rd-inv request after the modifier
+            // changed from 7th to Triad). getChordDetails already clamps for
+            // the name / voicing; we mirror the clamp here for the UI.
+            const chordNoteCount = details.chordNoteCount || 0;
+            const effectiveInversion = clampInversion(inversionValue, chordNoteCount);
+
+            // Modifier buttons HTML (same visual language as reference mode, filtered).
+            const modifiersHtml = BASE_MODIFIERS
+                .filter(mod => {
+                    if (mod.onlyForMajorDegrees) {
+                        if (state.scaleType !== 'Major') return false;
+                        if (!mod.onlyForMajorDegrees.includes(degreeIdx)) return false;
+                    }
+                    return true;
+                })
+                .map(mod => {
+                    const isActive = modifierKey === mod.key;
+                    return `
+                        <button type="button"
+                            data-step-index="${stepIdx}"
+                            data-modifier="${mod.key}"
+                            class="progression-modifier-button px-3 py-1 text-xs font-medium rounded-full transition-all duration-200 whitespace-nowrap border-2 border-transparent hover:border-indigo-400 ${
+                                isActive
+                                    ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/50'
+                                    : 'bg-gray-700/60 text-gray-300 backdrop-blur-sm hover:bg-gray-600/70'
+                            }">
+                            ${mod.label}
+                        </button>
+                    `;
+                })
+                .join('');
+
+            // Inversion buttons (mirror reference mode rules: 3rd-inv is only
+            // rendered for exactly-4-note chords; insufficient-note variants
+            // render disabled rather than disappearing so the row stays stable).
+            const inversionsHtml = INVERSIONS
+                .filter(inv => inv.exactNotes === undefined || chordNoteCount === inv.exactNotes)
+                .map(inv => {
+                    const isActive = effectiveInversion === inv.value;
+                    const isDisabled = inv.minNotes !== undefined && chordNoteCount < inv.minNotes;
+                    const activeCls = isActive
+                        ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/50'
+                        : 'bg-gray-700/60 text-gray-300 backdrop-blur-sm hover:bg-gray-600/70';
+                    const disabledCls = isDisabled
+                        ? 'opacity-40 cursor-not-allowed pointer-events-none'
+                        : 'hover:border-indigo-400';
+                    return `
+                        <button type="button"
+                            data-step-index="${stepIdx}"
+                            data-inversion="${inv.value}"
+                            ${isDisabled ? 'disabled' : ''}
+                            class="progression-inversion-button px-3 py-1 text-xs font-medium rounded-full transition-all duration-200 whitespace-nowrap border-2 border-transparent ${disabledCls} ${activeCls}">
+                            ${inv.label}
+                        </button>
+                    `;
+                })
+                .join('');
+
+            return `
+                <div class="bg-gray-800/50 backdrop-blur-md p-3 rounded-xl shadow-xl border border-indigo-700/30">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2 px-1">
+                        <div class="flex items-baseline gap-2 flex-wrap">
+                            <span class="text-xs uppercase text-indigo-300 font-light">Step ${stepIdx + 1}</span>
+                            <span class="text-xs uppercase text-gray-400 font-light">· ${roman}</span>
+                            <span class="text-xs text-gray-500 font-mono">(级数 ${displayDegree})</span>
+                            <h3 class="text-lg font-extrabold text-white">${details.name}</h3>
+                        </div>
+                        <div class="flex flex-wrap gap-1 justify-start sm:justify-end">
+                            ${modifiersHtml}
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1 justify-start sm:justify-end mb-2 px-1 pt-1 border-t border-gray-700/30">
+                        <span class="text-[10px] uppercase tracking-wider text-sky-300/70 mr-1">转位 (Inv)</span>
+                        ${inversionsHtml}
+                    </div>
+                    <div class="progression-keyboard-container flex justify-start p-2 bg-gray-900/40 rounded-lg overflow-x-auto border border-gray-700/40">
+                        <svg class="progression-piano-svg select-none min-w-max"
+                            data-step-index="${stepIdx}"></svg>
+                    </div>
+                </div>
+            `;
+        };
+
+        // Render the piano SVG inside a mounted step DOM element.
+        const renderProgressionStepPiano = (stepEl, stepIdx) => {
+            const svgEl = stepEl.querySelector('.progression-piano-svg');
+            const containerEl = stepEl.querySelector('.progression-keyboard-container');
+            const { degrees, modifiers, inversions } = state.progression;
+            const details = getChordDetails(
+                state.selectedKey, state.scaleType,
+                degrees[stepIdx], modifiers[stepIdx], state.displayAllOctaves,
+                inversions?.[stepIdx] || 0, state.chordRelativeLabels
+            );
+            renderPianoKeyboard(
+                svgEl, containerEl,
+                details.highlightNotesWithOctave,
+                getProgressionPianoOpts()
+            );
+        };
+
+        // Bind modifier-button click handlers for a single step card. Each
+        // click updates ONLY that step's state + DOM without re-running the
+        // full render() — this is the core of the per-step-update optimization.
+        const bindProgressionStepListeners = (stepEl) => {
+            stepEl.querySelectorAll('.progression-modifier-button').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const stepIdx = parseInt(e.currentTarget.getAttribute('data-step-index'), 10);
+                    const modKey = e.currentTarget.getAttribute('data-modifier');
+                    // Mutate progression state in place (modifier change has no
+                    // cross-step side effects, so no need to go through setState
+                    // and trigger a full view rebuild). Inversion is intentionally
+                    // preserved across modifier changes — clampInversion inside
+                    // getChordDetails / renderProgressionStepCard will coerce
+                    // it down if the new chord has too few notes.
+                    state = {
+                        ...state,
+                        progression: {
+                            ...state.progression,
+                            modifiers: state.progression.modifiers.map((m, i) =>
+                                i === stepIdx ? modKey : m
+                            ),
+                        },
+                    };
+                    updateProgressionStepAt(stepIdx);
+                });
+            });
+
+            // Per-step inversion buttons: same single-step update optimization
+            // as modifiers. Ignored when the button is disabled (min-notes rule).
+            stepEl.querySelectorAll('.progression-inversion-button').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    if (e.currentTarget.hasAttribute('disabled')) return;
+                    const stepIdx = parseInt(e.currentTarget.getAttribute('data-step-index'), 10);
+                    const invValue = parseInt(e.currentTarget.getAttribute('data-inversion'), 10) || 0;
+                    const currentInversions =
+                        state.progression.inversions || state.progression.degrees.map(() => 0);
+                    state = {
+                        ...state,
+                        progression: {
+                            ...state.progression,
+                            inversions: currentInversions.map((v, i) =>
+                                i === stepIdx ? invValue : v
+                            ),
+                        },
+                    };
+                    updateProgressionStepAt(stepIdx);
+                });
+            });
+        };
+
+        // Build a detached DOM element for a single step from its HTML string.
+        const buildProgressionStepElement = (stepIdx) => {
+            const { degrees, modifiers, inversions } = state.progression;
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = renderProgressionStepCard(
+                stepIdx, degrees[stepIdx], modifiers[stepIdx], inversions?.[stepIdx] || 0
+            ).trim();
+            return wrapper.firstElementChild;
+        };
+
+        // Replace the existing step card at `stepIdx` with a freshly rendered
+        // one. Used by the per-step update path (modifier click) to avoid
+        // rebuilding all N cards when only one changed.
+        const updateProgressionStepAt = (stepIdx) => {
+            const container = document.getElementById('progression-steps');
+            const existing = container.children[stepIdx];
+            if (!existing) return;
+            const fresh = buildProgressionStepElement(stepIdx);
+            container.replaceChild(fresh, existing);
+            renderProgressionStepPiano(fresh, stepIdx);
+            bindProgressionStepListeners(fresh);
+
+            // Keep the top input box in sync with the per-step state so the
+            // slash-chord notation reflects inversion clicks live (e.g. a
+            // Root→1st-Inv click on step 2 rewrites "1-5-6-5" into
+            // "1-5/7-6-5"). Skipped if the user is currently typing in the
+            // box to avoid yanking their caret.
+            const input = document.getElementById('progression-input');
+            if (input && document.activeElement !== input) {
+                input.value = formatProgressionSteps(
+                    state.progression.degrees,
+                    state.progression.inversions,
+                );
+            }
+        };
+
+        const renderProgressionView = () => {
+            // Sync input box with state (helpful after preset selection / mode
+            // switch / per-step inversion click). Inversions 1-2 round-trip
+            // as slash-chord tokens ("5/7"); other cases collapse to just the
+            // root number — see formatProgressionToken for the full contract.
+            const input = document.getElementById('progression-input');
+            if (document.activeElement !== input) {
+                input.value = formatProgressionSteps(
+                    state.progression.degrees,
+                    state.progression.inversions,
+                );
+            }
+
+            // Full rebuild: used only when step count or global context
+            // (key / scale / displayAllOctaves / mode) changes.
+            const container = document.getElementById('progression-steps');
+            const { degrees, modifiers, inversions } = state.progression;
+
+            container.innerHTML = degrees.map((_, i) =>
+                renderProgressionStepCard(i, degrees[i], modifiers[i], inversions?.[i] || 0)
+            ).join('');
+
+            Array.from(container.children).forEach((stepEl, i) => {
+                renderProgressionStepPiano(stepEl, i);
+                bindProgressionStepListeners(stepEl);
+            });
+        };
+
+        // Toggle view visibility according to current appMode.
+        const applyModeVisibility = () => {
+            const refView = document.getElementById('reference-view');
+            const progView = document.getElementById('progression-view');
+            if (state.appMode === 'progression') {
+                refView.classList.add('hidden');
+                progView.classList.remove('hidden');
+            } else {
+                refView.classList.remove('hidden');
+                progView.classList.add('hidden');
+            }
+            // Update mode switch button visuals
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                const isActive = btn.getAttribute('data-mode') === state.appMode;
+                btn.classList.toggle('bg-indigo-500', isActive);
+                btn.classList.toggle('text-white', isActive);
+                btn.classList.toggle('shadow-lg', isActive);
+                btn.classList.toggle('shadow-indigo-500/50', isActive);
+                btn.classList.toggle('text-gray-300', !isActive);
+                btn.classList.toggle('hover:bg-gray-600/70', !isActive);
+            });
+        };
+
         // --- MAIN RENDER FUNCTION ---
-        
-        const render = () => {
+
+        const renderReferenceView = () => {
             renderTitle();
 
             const qualities = state.scaleType === 'Major' ? MAJOR_CHORD_QUALITIES : MINOR_CHORD_QUALITIES;
@@ -920,12 +1618,15 @@
             }));
 
             const modifier = state.chordModifiers[state.currentChordIndex];
+            const inversion = state.chordInversions[state.currentChordIndex] || 0;
             const currentChordDetails = getChordDetails(
-                state.selectedKey, 
-                state.scaleType, 
-                primaryChordsInKey[state.currentChordIndex].degree, 
-                modifier, 
-                state.displayAllOctaves
+                state.selectedKey,
+                state.scaleType,
+                primaryChordsInKey[state.currentChordIndex].degree,
+                modifier,
+                state.displayAllOctaves,
+                inversion,
+                state.chordRelativeLabels
             );
 
             // Secondary ii-V-I computation. Target root is the diatonic root of
@@ -945,29 +1646,67 @@
                 displayDetails = preview;
             }
 
-            renderPianoKeyboard(displayDetails.highlightNotesWithOctave);
+            renderPianoKeyboard(
+                document.getElementById('piano-svg'),
+                document.getElementById('keyboard-container'),
+                displayDetails.highlightNotesWithOctave
+            );
             renderChordGrid(primaryChordsInKey);
             renderModifiers();
+            // Inversion panel reflects the PRIMARY chord's voicing size, not a
+            // previewed secondary chord — users toggle inversions for the
+            // currently-selected diatonic degree only.
+            renderInversions(currentChordDetails.chordNoteCount);
             renderInfoDisplay(displayDetails);
             renderSecondary251(secondaryDetails);
+        };
+
+        const render = () => {
+            applyModeVisibility();
+            if (state.appMode === 'progression') {
+                renderProgressionView();
+            } else {
+                renderReferenceView();
+            }
         };
 
         // --- STATE & EVENT HANDLING ---
 
         const setState = (newState) => {
-            // Check if selectedKey or scaleType changes to reset modifiers
-            if (newState.selectedKey !== undefined && newState.selectedKey !== state.selectedKey ||
-                newState.scaleType !== undefined && newState.scaleType !== state.scaleType) {
-                
+            // Check if selectedKey or scaleType changes to reset modifiers in
+            // BOTH reference and progression modes (but keep each progression's
+            // step count — only reset per-step modifiers to Triad).
+            const keyOrScaleChanged =
+                (newState.selectedKey !== undefined && newState.selectedKey !== state.selectedKey) ||
+                (newState.scaleType !== undefined && newState.scaleType !== state.scaleType);
+
+            if (keyOrScaleChanged) {
                 newState.chordModifiers = Array(7).fill('Triad');
+                newState.chordInversions = Array(7).fill(0);
                 newState.currentChordIndex = 0;
                 newState.secondary251Expanded = false;
                 newState.previewSecondary = null;
+                // Reset progression modifiers + inversions (preserve degrees).
+                const nextProgression = newState.progression ?? state.progression;
+                newState.progression = {
+                    ...nextProgression,
+                    modifiers: nextProgression.degrees.map(() => 'Triad'),
+                    inversions: nextProgression.degrees.map(() => 0),
+                };
+            }
+
+            // Switching to a different scale degree resets all per-degree
+            // inversions back to Root — inversion is a voicing choice that
+            // should not silently persist across chord selections.
+            if (newState.currentChordIndex !== undefined &&
+                newState.currentChordIndex !== state.currentChordIndex &&
+                newState.chordInversions === undefined) {
+                newState.chordInversions = Array(7).fill(0);
             }
 
             // Any "primary mode" change auto-exits the secondary-chord preview,
             // unless the caller explicitly specifies previewSecondary itself.
-            const resetTriggers = ['selectedKey', 'scaleType', 'currentChordIndex', 'chordModifiers'];
+            const resetTriggers = ['selectedKey', 'scaleType', 'currentChordIndex', 'chordModifiers', 'chordInversions'];
             if (newState.previewSecondary === undefined &&
                 resetTriggers.some(k => newState[k] !== undefined)) {
                 newState.previewSecondary = null;
@@ -981,6 +1720,134 @@
             render();
         };
 
+        // --- PROGRESSION INPUT PARSING ---
+
+        // Parse a single progression token into { degree, inversion } (both
+        // 0-indexed). Supports two shapes:
+        //   "5"    → plain diatonic triad on scale degree 5 (inversion 0)
+        //   "5/7"  → slash chord: triad built on degree 5, scale degree 7 as
+        //            bass. The bass MUST be a chord tone of the triad
+        //            ({degree, degree+2, degree+4} mod 7 in scale-degree
+        //            space) — otherwise it cannot be expressed as a
+        //            triad inversion and we return an error.
+        // Returns { valid, degree, inversion, error }.
+        const parseProgressionToken = (raw) => {
+            const t = (raw || '').trim();
+            if (!t) return { valid: false, error: '空 token' };
+
+            // Root-only: just a scale degree 1..7
+            if (/^[1-7]$/.test(t)) {
+                return { valid: true, degree: parseInt(t, 10) - 1, inversion: 0 };
+            }
+
+            // Slash chord a/b
+            const m = t.match(/^([1-7])\/([1-7])$/);
+            if (!m) {
+                return {
+                    valid: false,
+                    error: `非法 token "${t}"：每项必须是 1-7 的整数，或 a/b 斜杠和弦（如 5/7）`,
+                };
+            }
+            const dZero = parseInt(m[1], 10) - 1;
+            const bZero = parseInt(m[2], 10) - 1;
+            // Scale-degree members of the diatonic triad built on `dZero`.
+            // Works for both Major and Minor scales because triads are built
+            // by stacking thirds in scale-degree space (mod 7) regardless of
+            // chord quality.
+            const triad = [dZero % 7, (dZero + 2) % 7, (dZero + 4) % 7];
+            const idx = triad.indexOf(bZero);
+            if (idx === -1) {
+                const legal = triad.map(i => i + 1).join('/');
+                return {
+                    valid: false,
+                    error: `非法斜杠和弦 "${t}"：低音 ${bZero + 1} 不是 ${dZero + 1} 级三和弦内音（允许 ${legal}）`,
+                };
+            }
+            return { valid: true, degree: dZero, inversion: idx };
+        };
+
+        // Parse a progression expressed as an array of tokens (already split).
+        // Returns { valid, degrees, inversions, error } using 0-indexed values.
+        // Used by both `parseProgressionInput` (user text) and the preset-click
+        // handler (token array from PROGRESSION_PRESETS).
+        const parseProgressionTokens = (tokens) => {
+            if (tokens.length < PROGRESSION_MIN || tokens.length > PROGRESSION_MAX) {
+                return {
+                    valid: false,
+                    error: `步骤数需在 ${PROGRESSION_MIN}-${PROGRESSION_MAX} 之间（当前 ${tokens.length}）`,
+                };
+            }
+            const degrees = [];
+            const inversions = [];
+            for (const t of tokens) {
+                const r = parseProgressionToken(t);
+                if (!r.valid) return { valid: false, error: r.error };
+                degrees.push(r.degree);
+                inversions.push(r.inversion);
+            }
+            return { valid: true, degrees, inversions };
+        };
+
+        // Parse raw textual input ("1,5/7,6,5" / "1 5/7 6 5" / "1-5/7-6-5")
+        // into { valid, degrees, inversions, error }. Separators: space, comma
+        // or dash (slashes inside a token are preserved).
+        const parseProgressionInput = (raw) => {
+            const trimmed = (raw || '').trim();
+            if (!trimmed) {
+                return { valid: false, error: '请输入和弦进行，例如 1-6-4-5 或 1-5/7-6-5' };
+            }
+            const tokens = trimmed.split(/[\s,\-]+/).filter(Boolean);
+            return parseProgressionTokens(tokens);
+        };
+
+        // Reverse of parseProgressionToken: given a step's stored
+        // degree+inversion, produce the textual token ("5" or "5/7") for
+        // the input box / preset dropdown. Only inversions 1 and 2 round-trip
+        // through slash notation — 3rd inversion (only possible on 7ths)
+        // collapses to just the root number, since a/b cannot express
+        // "bass = 7th of chord" without overloading the grammar. Inv 3
+        // therefore does not survive a text-layer round-trip; if the user
+        // re-applies the text, any 3rd-inv state is reset to Root, which is
+        // consistent with how modifier values are also reset on Apply.
+        const formatProgressionToken = (degreeZero, inversion) => {
+            const deg = degreeZero + 1;
+            if (inversion !== 1 && inversion !== 2) return String(deg);
+            const triad = [degreeZero % 7, (degreeZero + 2) % 7, (degreeZero + 4) % 7];
+            const bass = triad[inversion] + 1;
+            return `${deg}/${bass}`;
+        };
+
+        const formatProgressionSteps = (degrees, inversions, separator = '-') => {
+            return degrees
+                .map((d, i) => formatProgressionToken(d, inversions?.[i] || 0))
+                .join(separator);
+        };
+
+        const showProgressionError = (msg) => {
+            const el = document.getElementById('progression-error');
+            if (!msg) {
+                el.classList.add('hidden');
+                el.textContent = '';
+            } else {
+                el.classList.remove('hidden');
+                el.textContent = msg;
+            }
+        };
+
+        // Apply a parsed progression ({ degrees, inversions }) — replaces the
+        // step count, resets modifiers to Triad, and seeds the parsed
+        // inversion per step. Any prior modifier / inversion state is dropped
+        // (Apply / preset is the user's explicit "rebuild" action).
+        const applyProgressionSteps = (parsed) => {
+            const { degrees, inversions } = parsed;
+            const nextProgression = {
+                degrees,
+                modifiers: degrees.map(() => 'Triad'),
+                inversions: inversions.slice(),
+            };
+            setState({ progression: nextProgression });
+        };
+
         const setupEventListeners = () => {
             // Key Select
             document.getElementById('key-select').addEventListener('change', (e) => {
@@ -992,16 +1859,27 @@
                 setState({ scaleType: e.target.value });
             });
 
+            // Shared visual-dot updater so every pill-style toggle in this
+            // panel animates identically (slide + color swap on ON).
+            const syncToggleDot = (inputEl) => {
+                const dot = inputEl.nextElementSibling.nextElementSibling;
+                const on = inputEl.checked;
+                dot.classList.toggle('translate-x-4', on);
+                dot.classList.toggle('bg-indigo-500', on);
+                dot.classList.toggle('bg-white', !on);
+            };
+
             // Octave Toggle
             document.getElementById('octave-toggle').addEventListener('change', (e) => {
-                const isChecked = e.target.checked;
-                // Update the visual dot position
-                const dot = e.target.nextElementSibling.nextElementSibling;
-                dot.classList.toggle('translate-x-4', isChecked);
-                dot.classList.toggle('bg-indigo-500', isChecked);
-                dot.classList.toggle('bg-white', !isChecked);
+                syncToggleDot(e.target);
+                setState({ displayAllOctaves: e.target.checked });
+            });
 
-                setState({ displayAllOctaves: isChecked });
+            // Chord-Intervals Toggle: flip keyboard digits between key-relative
+            // (首调音级, default) and chord-relative (和弦组成音) labelling.
+            document.getElementById('chord-interval-toggle').addEventListener('change', (e) => {
+                syncToggleDot(e.target);
+                setState({ chordRelativeLabels: e.target.checked });
             });
 
             // Secondary ii-V-I (临时 2-5-1) Panel Toggle
@@ -1018,6 +1896,57 @@
                     setState({ previewSecondary: next });
                 });
             });
+
+            // Mode Switcher (A: Reference / B: Progression)
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const mode = btn.getAttribute('data-mode');
+                    if (mode !== state.appMode) {
+                        setState({ appMode: mode });
+                    }
+                });
+            });
+
+            // Progression Apply (button + Enter key)
+            const applyProgressionFromInput = () => {
+                const raw = document.getElementById('progression-input').value;
+                const parsed = parseProgressionInput(raw);
+                if (!parsed.valid) {
+                    showProgressionError(parsed.error);
+                    return;
+                }
+                showProgressionError(null);
+                applyProgressionSteps(parsed);
+            };
+            document.getElementById('progression-apply').addEventListener('click', applyProgressionFromInput);
+            document.getElementById('progression-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    applyProgressionFromInput();
+                }
+            });
+            // Clear error while user is editing
+            document.getElementById('progression-input').addEventListener('input', () => {
+                showProgressionError(null);
+            });
+
+            // Progression Preset dropdown: apply immediately on change.
+            document.getElementById('progression-preset').addEventListener('change', (e) => {
+                const idx = parseInt(e.target.value, 10);
+                // Reset back to placeholder so the same preset can be re-picked later.
+                e.target.value = '';
+                if (Number.isNaN(idx) || idx < 0 || idx >= PROGRESSION_PRESETS.length) return;
+                const preset = PROGRESSION_PRESETS[idx];
+                const parsed = parseProgressionTokens(preset.tokens);
+                if (!parsed.valid) {
+                    // Should not happen for author-curated presets, but surface
+                    // the error just in case someone adds an invalid entry.
+                    showProgressionError(parsed.error);
+                    return;
+                }
+                showProgressionError(null);
+                applyProgressionSteps(parsed);
+            });
         };
 
         // --- INITIALIZATION ---
@@ -1031,6 +1960,31 @@
                 option.textContent = key.label;
                 keySelect.appendChild(option);
             });
+
+            // Fill Progression Preset Options
+            const presetSelect = document.getElementById('progression-preset');
+            // First, a placeholder so the same preset can be re-selected later
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = '— 选择一个预设 —';
+            placeholder.selected = true;
+            presetSelect.appendChild(placeholder);
+            PROGRESSION_PRESETS.forEach((preset, i) => {
+                const option = document.createElement('option');
+                option.value = String(i);
+                // Show the raw token sequence (e.g. "1-5/7-6-5-4-3-2-5")
+                // without any stylistic name — per user request, names are
+                // frequently inaccurate and were removed.
+                option.textContent = preset.tokens.join('-');
+                presetSelect.appendChild(option);
+            });
+
+            // Seed the progression input with the default progression,
+            // including any slash-chord notation from the seed inversions.
+            document.getElementById('progression-input').value = formatProgressionSteps(
+                state.progression.degrees,
+                state.progression.inversions,
+            );
 
             setupEventListeners();
             render(); // Initial render
