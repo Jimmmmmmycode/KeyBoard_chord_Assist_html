@@ -46,17 +46,32 @@
         }
 
         /* Highlight classes */
+        /* Three-tier color scheme for keyboard highlights:
+         *   - Root (red):   the chord root.
+         *   - Core (purple): stable triad tones — 3rd (b3/3) and 5th (b5/P5/#5).
+         *   - Color (amber): 色彩音 — any chord tone that is neither root nor
+         *                    part of the triad skeleton, i.e. 7ths, sus 2/4,
+         *                    6ths, 9ths, 11ths, 13ths. Warm amber pairs well
+         *                    with the red+purple core and reads clearly on
+         *                    both white and black keys.
+         */
         .key-highlight-root {
             fill: #ef4444 !important; /* Red 500 */
         }
         .key-highlight-tone {
             fill: #a855f7 !important; /* Purple 500 */
         }
+        .key-highlight-color {
+            fill: #f59e0b !important; /* Amber 500 */
+        }
         .black-key.key-highlight-root {
             fill: #b91c1c !important; /* Darker Red */
         }
         .black-key.key-highlight-tone {
             fill: #7e22ce !important; /* Darker Purple */
+        }
+        .black-key.key-highlight-color {
+            fill: #d97706 !important; /* Darker Amber */
         }
     </style>
 </head>
@@ -690,6 +705,18 @@
                      functionIntervalValue = fullIntervals.find(i => normalizeIndex(i % 12) === intervalFromRoot);
                 }
                 const isOmitted = omittedIntervals.includes(functionIntervalValue);
+                // "色彩音" (color tone): any chord member that is neither the
+                // root nor part of the triad skeleton. We consider the
+                // skeleton to be {root, any 3rd, any 5th} so the classifier
+                // works uniformly across Major/minor/dim/aug/sus chords.
+                //   stable intervals (mod 12): 0 root, 3/4 3rds, 6/7/8 5ths
+                //   everything else → color: 2 (sus2/9), 5 (sus4/11),
+                //                             9 (6/13), 10 (b7), 11 (Maj7)
+                // Omitted notes (3rd/5th stripped on 11th/13th) are not
+                // marked as color because they still read as skeleton tones.
+                const intervalMod12 = normalizeIndex(intervalFromRoot);
+                const isSkeletonInterval = [0, 3, 4, 6, 7, 8].includes(intervalMod12);
+                const isColor = !isOmitted && !isSkeletonInterval;
                 // Keyboard digit label:
                 //   - default (key-relative "首调音级"): uses selected key's
                 //     tonic as "1" — e.g. Dm in C Major → 2 / 4 / 6.
@@ -706,6 +733,7 @@
                     keyboardLabel: keyboardLabel,
                     isRoot: functionIntervalValue === 0,
                     isOmitted: isOmitted,
+                    isColor: isColor,
                 };
             });
 
@@ -860,6 +888,10 @@
                 const functionIntervalValue =
                     fullIntervals.find(i => normalizeIndex(i) === intervalFromRoot) ?? intervalFromRoot;
                 const keyboardLabel = semitoneToKeyDegree(noteIndex - labelTonicIndex);
+                // Same color-tone classifier as getChordDetails: anything
+                // outside the {root, 3rd, 5th} skeleton is treated as a 色彩
+                // 音 and gets the amber highlight on the keyboard.
+                const isSkeletonInterval = [0, 3, 4, 6, 7, 8].includes(intervalFromRoot);
                 return {
                     fullNote: n.fullNote,
                     keyboardIndex: n.index,
@@ -867,6 +899,7 @@
                     keyboardLabel,
                     isRoot: functionIntervalValue === 0,
                     isOmitted: false,
+                    isColor: !isSkeletonInterval && intervalFromRoot !== 0,
                 };
             });
         };
@@ -995,6 +1028,7 @@
                 const isHl = !!noteData;
                 const isRoot = noteData ? noteData.isRoot : false;
                 const isOmitted = noteData ? noteData.isOmitted : false;
+                const isColor = noteData ? !!noteData.isColor : false;
 
                 // --- Common classes ---
                 let highlightClass = '';
@@ -1002,13 +1036,20 @@
                 let labelFillClass = 'fill-gray-600';
 
                 if (isHl) {
-                    // Root: Red, Tone: Purple, Omitted: Gray with high transparency
+                    // Four-way classification (checked in priority order):
+                    //   Root    → red   (key-highlight-root)
+                    //   Omitted → faded gray (extended-chord guide tones)
+                    //   Color   → amber (7ths, sus 2/4, 6/9/11/13)
+                    //   Default → purple (core triad tones: 3rd & 5th)
                     if (isRoot) {
                         highlightClass = 'key-highlight-root';
                         labelFillClass = 'fill-red-900';
                     } else if (isOmitted) {
                         highlightClass = 'fill-gray-500/30'; // Very subtle highlight for omitted tone
                         labelFillClass = 'fill-gray-400';
+                    } else if (isColor) {
+                        highlightClass = 'key-highlight-color';
+                        labelFillClass = 'fill-amber-900';
                     } else {
                         highlightClass = 'key-highlight-tone';
                         labelFillClass = 'fill-purple-900';
@@ -1065,8 +1106,13 @@
                         y = O.funcLabelWhiteY;
                         if (isRoot) {
                             fillClass = 'fill-white';
+                        } else if (isOmitted) {
+                            fillClass = 'fill-purple-500/30';
+                        } else if (isColor) {
+                            // Dark amber on a light amber-500 key reads clearly.
+                            fillClass = 'fill-amber-900';
                         } else {
-                            fillClass = isOmitted ? 'fill-purple-500/30' : 'fill-purple-700/80';
+                            fillClass = 'fill-purple-700/80';
                         }
                     } else {
                         const blackX = xPos + KEY_WIDTH - (BLACK_KEY_WIDTH / 2);
@@ -1074,8 +1120,13 @@
                         y = BLACK_KEY_HEIGHT - 10;
                         if (isRoot) {
                             fillClass = 'fill-white';
+                        } else if (isOmitted) {
+                            fillClass = 'fill-purple-300/40';
+                        } else if (isColor) {
+                            // Light amber on a darker amber-600 black key for contrast.
+                            fillClass = 'fill-amber-100';
                         } else {
-                            fillClass = isOmitted ? 'fill-purple-300/40' : 'fill-purple-300';
+                            fillClass = 'fill-purple-300';
                         }
                     }
                     
