@@ -146,6 +146,56 @@
                 </div>
             </div>
 
+            <!-- Secondary ii-V-I (临时 2-5-1) Collapsible Panel -->
+            <div class="mt-4 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-amber-700/30 shadow-inner overflow-hidden">
+                <button id="secondary-251-toggle" type="button"
+                    class="w-full flex items-center justify-between p-4 text-left hover:bg-gray-700/20 transition-colors">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <span class="text-amber-400 font-bold">临时 2-5-1 模式 (Secondary ii-V-I)</span>
+                        <span id="secondary-251-summary" class="text-xs text-gray-500">点击展开，查看解决到当前和弦的临时二五</span>
+                    </div>
+                    <svg id="secondary-251-arrow" class="w-5 h-5 text-amber-400 transition-transform duration-200 shrink-0"
+                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+                <div id="secondary-251-content" class="hidden px-4 pb-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <!-- Secondary ii card (clickable: preview on piano) -->
+                        <div id="secondary-251-ii-card" data-preview="ii"
+                            class="secondary-251-card p-3 rounded-xl bg-gray-900/40 border-2 border-amber-600/40 shadow-md shadow-black/20 cursor-pointer transition-all duration-200 hover:bg-gray-800/60">
+                            <p class="text-xs font-light uppercase text-amber-300 mb-1">
+                                临时 ii (Half-diminished 7th)
+                            </p>
+                            <h4 id="secondary-251-ii-name" class="text-xl font-extrabold text-white truncate">—</h4>
+                            <div class="mt-2 space-y-1">
+                                <p class="text-xs text-gray-400">绝对音名 (Absolute Notes):</p>
+                                <p id="secondary-251-ii-notes" class="text-sm font-mono tracking-widest text-amber-200">—</p>
+                                <p class="text-xs text-gray-400 mt-1">音级 (Scale Degrees):</p>
+                                <p id="secondary-251-ii-degrees" class="text-sm font-mono tracking-widest text-emerald-400">—</p>
+                            </div>
+                        </div>
+                        <!-- Secondary V card (clickable: preview on piano) -->
+                        <div id="secondary-251-v-card" data-preview="V"
+                            class="secondary-251-card p-3 rounded-xl bg-gray-900/40 border-2 border-amber-600/40 shadow-md shadow-black/20 cursor-pointer transition-all duration-200 hover:bg-gray-800/60">
+                            <p class="text-xs font-light uppercase text-amber-300 mb-1">
+                                临时 V (Dominant 7th)
+                            </p>
+                            <h4 id="secondary-251-v-name" class="text-xl font-extrabold text-white truncate">—</h4>
+                            <div class="mt-2 space-y-1">
+                                <p class="text-xs text-gray-400">绝对音名 (Absolute Notes):</p>
+                                <p id="secondary-251-v-notes" class="text-sm font-mono tracking-widest text-amber-200">—</p>
+                                <p class="text-xs text-gray-400 mt-1">音级 (Scale Degrees):</p>
+                                <p id="secondary-251-v-degrees" class="text-sm font-mono tracking-widest text-emerald-400">—</p>
+                            </div>
+                        </div>
+                    </div>
+                    <p id="secondary-251-target" class="mt-3 text-xs text-gray-500 text-center">
+                        点击上方卡片可在键盘上预览该过渡和弦 · 解决到 (Resolves to): <span class="text-amber-300 font-semibold">—</span>
+                    </p>
+                </div>
+            </div>
+
             <!-- Current Chord Note Information -->
             <div class="mt-6 p-4 bg-gray-800/50 backdrop-blur-sm rounded-xl border border-indigo-700/30 shadow-inner">
                 <p class="text-gray-400 font-medium mb-2">当前和弦组成音:</p>
@@ -266,6 +316,11 @@
             displayAllOctaves: false,
             // Initialize 7 diatonic chords to Triad modifier
             chordModifiers: Array(7).fill('Triad'), 
+            // Collapsible Secondary ii-V-I panel
+            secondary251Expanded: false,
+            // Which secondary chord (if any) is currently previewed on the keyboard
+            // null => show primary chord; 'ii' => preview secondary ii; 'V' => preview secondary V
+            previewSecondary: null,
         };
 
         // --- UTILITY FUNCTIONS ---
@@ -323,17 +378,23 @@
 
         // --- CORE CHORD CALCULATION LOGIC (Same as React version) ---
 
-        const getChordDetails = (root, scaleType, degree, modifier, displayAllOctaves) => {
-            const getScaleNotes = (root, scaleType) => {
-                const intervals = SCALE_FORMULAS[scaleType];
-                const rootIndex = getChromaticIndex(root);
-                const notes = intervals.map(interval => ALL_NOTES_SHARP[normalizeIndex(rootIndex + interval)]);
-                const enharmonicMap = { 'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb' };
-                const flatKeys = ['F', 'A#', 'D#', 'G#', 'C#', 'F#'];
-                const useFlats = flatKeys.includes(root);
-                return notes.map(note => (useFlats && enharmonicMap[note]) ? enharmonicMap[note] : note);
-            };
+        // Shared helpers for enharmonic display & scale-note generation (used by
+        // both primary chord calc and secondary ii-V-I calc)
+        const FLAT_KEYS = ['F', 'A#', 'D#', 'G#', 'C#', 'F#'];
+        const ENHARMONIC_MAP = { 'C#': 'Db', 'D#': 'Eb', 'F#': 'Gb', 'G#': 'Ab', 'A#': 'Bb' };
 
+        const toDisplayNote = (sharpName, useFlats) =>
+            (useFlats && ENHARMONIC_MAP[sharpName]) ? ENHARMONIC_MAP[sharpName] : sharpName;
+
+        const getScaleNotes = (root, scaleType) => {
+            const intervals = SCALE_FORMULAS[scaleType];
+            const rootIndex = getChromaticIndex(root);
+            const useFlats = FLAT_KEYS.includes(root);
+            const notes = intervals.map(interval => ALL_NOTES_SHARP[normalizeIndex(rootIndex + interval)]);
+            return notes.map(note => toDisplayNote(note, useFlats));
+        };
+
+        const getChordDetails = (root, scaleType, degree, modifier, displayAllOctaves) => {
             const scaleNotes = getScaleNotes(root, scaleType);
             const qualities = scaleType === 'Major' ? MAJOR_CHORD_QUALITIES : MINOR_CHORD_QUALITIES;
             const [diatonicTriad, diatonicSeventh, romanNumeral] = qualities[degree];
@@ -444,6 +505,99 @@
                 highlightNotesWithOctave,
                 degreeString: degreeString,
                 highlightNotes: highlightNotes,
+            };
+        };
+
+        // --- SECONDARY ii-V-I ("临时 2-5-1") CALCULATION ---
+
+        // Shared voicing helper: maps an abstract chord (root chromatic index +
+        // interval list) onto the 88-key keyboard, producing the same
+        // `highlightNotesWithOctave` shape used by renderPianoKeyboard.
+        const voiceChordOnKeyboard = (rootChromaticIndex, intervals, displayAllOctaves, useFlats) => {
+            const rootSharp = ALL_NOTES_SHARP[rootChromaticIndex];
+            let rootKeyIndex_88 = KEYBOARD_NOTES.findIndex(k => k.note === rootSharp && k.octave === 4);
+            if (rootKeyIndex_88 === -1) rootKeyIndex_88 = KEYBOARD_NOTES.findIndex(k => k.note === rootSharp);
+            if (rootKeyIndex_88 === -1) return [];
+
+            const baseChordNotes = [KEYBOARD_NOTES[rootKeyIndex_88]];
+            let lastKeyIndex = rootKeyIndex_88;
+            const subsequentIntervals = intervals.slice(1).slice().sort((a, b) => a - b);
+            const fullIntervals = [0, ...subsequentIntervals].sort((a, b) => a - b);
+
+            for (const interval of subsequentIntervals) {
+                const target011Index = normalizeIndex(rootChromaticIndex + interval);
+                let foundKeyIndex = -1;
+                let searchStartIndex = lastKeyIndex + 1;
+                if (interval === 21 && C5_INDEX !== -1) searchStartIndex = Math.max(searchStartIndex, C5_INDEX);
+                for (let i = searchStartIndex; i < 88; i++) {
+                    if (KEYBOARD_NOTES[i].note === ALL_NOTES_SHARP[target011Index]) {
+                        foundKeyIndex = i;
+                        break;
+                    }
+                }
+                if (foundKeyIndex !== -1) {
+                    baseChordNotes.push(KEYBOARD_NOTES[foundKeyIndex]);
+                    lastKeyIndex = foundKeyIndex;
+                }
+            }
+
+            const targetIntervalIndices = fullIntervals.map(i => normalizeIndex(rootChromaticIndex + i));
+            const notesToHighlight = displayAllOctaves
+                ? KEYBOARD_NOTES.filter(key => targetIntervalIndices.includes(getChromaticIndex(key.note)))
+                : baseChordNotes;
+
+            return notesToHighlight.map(n => {
+                const noteIndex = getChromaticIndex(n.note);
+                const intervalFromRoot = normalizeIndex(noteIndex - rootChromaticIndex);
+                const functionIntervalValue =
+                    fullIntervals.find(i => normalizeIndex(i) === intervalFromRoot) ?? intervalFromRoot;
+                const keyboardLabel = intervalToDegree(functionIntervalValue).replace(/\(=.*\)/, '');
+                return {
+                    fullNote: n.fullNote,
+                    keyboardIndex: n.index,
+                    displayNote: toDisplayNote(n.note, useFlats),
+                    keyboardLabel,
+                    isRoot: functionIntervalValue === 0,
+                    isOmitted: false,
+                };
+            });
+        };
+
+        // Given a target chord root note (treated as the temporary I), return
+        // the ii (half-diminished 7th, +2 semitones) and V (dominant 7th,
+        // +7 semitones) chords that resolve to it. Each chord object carries
+        // the same fields as getChordDetails so it can drive both the cards and
+        // the piano/info preview.
+        const getSecondary251Details = (targetRootNote) => {
+            const targetIndex = getChromaticIndex(targetRootNote);
+            const useFlats = FLAT_KEYS.includes(state.selectedKey);
+
+            const buildChord = (offsetSemitones, intervalKey, suffix) => {
+                const rootIdx = normalizeIndex(targetIndex + offsetSemitones);
+                const rootName = toDisplayNote(ALL_NOTES_SHARP[rootIdx], useFlats);
+                const intervals = INTERVALS[intervalKey];
+                const notesArr = intervals.map(i =>
+                    toDisplayNote(ALL_NOTES_SHARP[normalizeIndex(rootIdx + i)], useFlats)
+                );
+                const degrees = intervals.map(intervalToDegree).join(' - ');
+                const highlightNotesWithOctave = voiceChordOnKeyboard(
+                    rootIdx, intervals, state.displayAllOctaves, useFlats
+                );
+                return {
+                    name: rootName + suffix,
+                    notes: notesArr.join(' - '),
+                    highlightNotes: notesArr,
+                    degrees: degrees,
+                    degreeString: degrees,
+                    inversion: 'Root Position (原位)',
+                    highlightNotesWithOctave,
+                };
+            };
+
+            return {
+                ii: buildChord(2, 'hdim7', 'ø7'),
+                V:  buildChord(7, '7th',   '7'),
+                target: toDisplayNote(ALL_NOTES_SHARP[targetIndex], useFlats),
             };
         };
 
@@ -706,6 +860,55 @@
             document.getElementById('scale-title').textContent = `${state.selectedKey} ${state.scaleType} 顺阶和弦`;
         };
 
+        const renderSecondary251 = (secondaryDetails) => {
+            const { ii, V, target } = secondaryDetails;
+
+            document.getElementById('secondary-251-ii-name').textContent = ii.name;
+            document.getElementById('secondary-251-ii-notes').textContent = ii.notes;
+            document.getElementById('secondary-251-ii-degrees').textContent = ii.degrees;
+
+            document.getElementById('secondary-251-v-name').textContent = V.name;
+            document.getElementById('secondary-251-v-notes').textContent = V.notes;
+            document.getElementById('secondary-251-v-degrees').textContent = V.degrees;
+
+            document.querySelector('#secondary-251-target span').textContent = target;
+
+            // Card active / inactive styling — keeps visual language of the
+            // primary chord-grid selection (stronger border + ring + scale).
+            const setCardActive = (cardEl, active) => {
+                const inactiveCls = ['border-amber-600/40'];
+                const activeCls   = [
+                    'border-amber-400', 'ring-4', 'ring-amber-500/40',
+                    'shadow-amber-500/30', 'scale-[1.02]'
+                ];
+                if (active) {
+                    cardEl.classList.remove(...inactiveCls);
+                    cardEl.classList.add(...activeCls);
+                } else {
+                    cardEl.classList.add(...inactiveCls);
+                    cardEl.classList.remove(...activeCls);
+                }
+            };
+            const iiCard = document.getElementById('secondary-251-ii-card');
+            const vCard  = document.getElementById('secondary-251-v-card');
+            setCardActive(iiCard, state.previewSecondary === 'ii');
+            setCardActive(vCard,  state.previewSecondary === 'V');
+
+            // Collapse / expand
+            const content = document.getElementById('secondary-251-content');
+            const arrow = document.getElementById('secondary-251-arrow');
+            const summary = document.getElementById('secondary-251-summary');
+            if (state.secondary251Expanded) {
+                content.classList.remove('hidden');
+                arrow.classList.add('rotate-180');
+                summary.textContent = `${ii.name}  →  ${V.name}  →  ${target}`;
+            } else {
+                content.classList.add('hidden');
+                arrow.classList.remove('rotate-180');
+                summary.textContent = '点击展开，查看解决到当前和弦的临时二五';
+            }
+        };
+
         // --- MAIN RENDER FUNCTION ---
         
         const render = () => {
@@ -725,10 +928,28 @@
                 state.displayAllOctaves
             );
 
-            renderPianoKeyboard(currentChordDetails.highlightNotesWithOctave);
+            // Secondary ii-V-I computation. Target root is the diatonic root of
+            // the selected degree — independent of any chord-quality modifier
+            // (a 2-5-1 resolves to a degree, not to a specific chord quality).
+            const scaleNotes = getScaleNotes(state.selectedKey, state.scaleType);
+            const targetRoot = scaleNotes[state.currentChordIndex];
+            const secondaryDetails = getSecondary251Details(targetRoot);
+
+            // Fork piano & info display: if a secondary card is being previewed,
+            // show that chord; otherwise show the primary chord as usual.
+            let displayDetails = currentChordDetails;
+            if (state.secondary251Expanded && state.previewSecondary) {
+                const preview = state.previewSecondary === 'ii'
+                    ? secondaryDetails.ii
+                    : secondaryDetails.V;
+                displayDetails = preview;
+            }
+
+            renderPianoKeyboard(displayDetails.highlightNotesWithOctave);
             renderChordGrid(primaryChordsInKey);
             renderModifiers();
-            renderInfoDisplay(currentChordDetails);
+            renderInfoDisplay(displayDetails);
+            renderSecondary251(secondaryDetails);
         };
 
         // --- STATE & EVENT HANDLING ---
@@ -740,6 +961,20 @@
                 
                 newState.chordModifiers = Array(7).fill('Triad');
                 newState.currentChordIndex = 0;
+                newState.secondary251Expanded = false;
+                newState.previewSecondary = null;
+            }
+
+            // Any "primary mode" change auto-exits the secondary-chord preview,
+            // unless the caller explicitly specifies previewSecondary itself.
+            const resetTriggers = ['selectedKey', 'scaleType', 'currentChordIndex', 'chordModifiers'];
+            if (newState.previewSecondary === undefined &&
+                resetTriggers.some(k => newState[k] !== undefined)) {
+                newState.previewSecondary = null;
+            }
+            // Collapsing the panel always drops the preview.
+            if (newState.secondary251Expanded === false) {
+                newState.previewSecondary = null;
             }
 
             state = { ...state, ...newState };
@@ -767,6 +1002,21 @@
                 dot.classList.toggle('bg-white', !isChecked);
 
                 setState({ displayAllOctaves: isChecked });
+            });
+
+            // Secondary ii-V-I (临时 2-5-1) Panel Toggle
+            document.getElementById('secondary-251-toggle').addEventListener('click', () => {
+                setState({ secondary251Expanded: !state.secondary251Expanded });
+            });
+
+            // Secondary ii-V-I Card Click: preview the secondary chord on the piano.
+            // Toggle off if the same card is clicked again; switch if the other is clicked.
+            document.querySelectorAll('.secondary-251-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    const which = card.getAttribute('data-preview'); // 'ii' or 'V'
+                    const next = state.previewSecondary === which ? null : which;
+                    setState({ previewSecondary: next });
+                });
             });
         };
 
