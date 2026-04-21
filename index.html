@@ -40,6 +40,15 @@
             stroke-width: 1.5;
         }
 
+        /* "C" anchor marker — gives every C white key a subtle sky tint so
+         * the user can quickly orient octaves on a long keyboard (especially
+         * useful in compact progression-step pianos where there are no
+         * scroll cues). Highlight fills (root / tone / color / omitted) all
+         * use `!important` so they cleanly override this base tint. */
+        .white-key.is-c-marker {
+            fill: #e0f2fe; /* Sky 100 — visible but unobtrusive */
+        }
+
         .black-key {
             fill: #1f2937;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.8), 0 2px 4px -2px rgba(0, 0, 0, 0.8);
@@ -285,7 +294,7 @@
                     <div class="flex-1 min-w-0">
                         <div class="flex gap-2">
                             <input id="progression-input" type="text"
-                                placeholder="例如: 1-6-4-5 或 1-5/7-6-5 (最多 10 步, 支持斜杠和弦如 5/7 = V 第一转位)"
+                                placeholder="例如: 1-6-4-5、1-5/7-6-5、1-b7-4-1 (最多 20 步; 支持斜杠和弦 5/7 与离调 b7, 仅 Major)"
                                 class="flex-1 min-w-0 bg-gray-700/70 border border-teal-600/50 text-gray-200 rounded-lg p-2.5 shadow-inner focus:ring-teal-500 focus:border-teal-500 transition-colors font-mono tracking-wider" />
                             <button id="progression-apply" type="button"
                                 class="px-4 py-2 rounded-lg bg-teal-500 text-white font-semibold shadow-lg shadow-teal-500/30 hover:bg-teal-400 transition-colors whitespace-nowrap">
@@ -435,6 +444,35 @@
             ['min', 'min7', 'iv'], ['min', '7th', 'v'], ['Triad', 'Maj7', 'VI'], ['Triad', '7th', 'VII'],
         ];
 
+        // Chromatic intervals for each diatonic-triad QUALITY label found in
+        // *_CHORD_QUALITIES above. Used by the progression input parser to
+        // validate slash-chord bass notes uniformly across diatonic and
+        // borrowed (b-) chord roots.
+        const TRIAD_INTERVALS_BY_QUALITY = {
+            'Triad': [0, 4, 7],   // major
+            'min':   [0, 3, 7],   // minor
+            'dim':   [0, 3, 6],   // diminished
+        };
+
+        // Used for borrowed-chord roman numerals (♭VII, ♭III, …). All
+        // borrowed chords default to Major-triad quality per spec, so we
+        // always uppercase the numeral and prepend the accidental.
+        const ROMAN_NUMERAL_UPPER = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'];
+        // Accidental codes:  -1 = flat (♭), 0 = natural, +1 = sharp (♯).
+        // v1 only supports `b` input (Q1 A1) but the display map keeps room
+        // for `#` so future extensions stay drop-in.
+        const ACCIDENTAL_DISPLAY  = { '-1': '♭', '0': '', '1': '♯' };
+        const ACCIDENTAL_INPUT    = { '-1': 'b', '0': '', '1': '#' };
+
+        // "♭VII" / "I" / "♯IV" — used in step-card meta label (UI).
+        const formatBorrowedRoman = (degree, accidental) =>
+            `${ACCIDENTAL_DISPLAY[String(accidental)]}${ROMAN_NUMERAL_UPPER[degree]}`;
+
+        // "b7" / "1" / "#4" — used in step-card "(级数 …)" hint and in
+        // text-layer round-trips (input box, preset dropdown).
+        const formatStepDegreeLabel = (degree, accidental) =>
+            `${ACCIDENTAL_INPUT[String(accidental)]}${degree + 1}`;
+
         // Find the index of C5 (Octave 5) for voicing 13th chords
         const C5_INDEX = KEYBOARD_NOTES.findIndex(k => k.fullNote === 'C5');
 
@@ -462,9 +500,15 @@
             { tokens: ['6', '4', '1', '5'] },
             { tokens: ['4', '3', '2', '1'] },
             { tokens: ['4', '5', '3', '6', '2', '5', '1'] },
+            // Borrowed-chord example (Major-only): I – ♭VII – IV – I, the
+            // classic Mixolydian rock cadence (e.g. "Sweet Home Alabama"-ish).
+            { tokens: ['1', 'b7', '4', '1'] },
+            // Andalusian-flavored: I – ♭VII – ♭VI – V (commonly minor in
+            // practice, but here as borrowed-chord display in Major).
+            { tokens: ['1', 'b7', 'b6', '5'] },
         ];
         const PROGRESSION_MIN = 1;
-        const PROGRESSION_MAX = 10;
+        const PROGRESSION_MAX = 20;
 
         // --- STATE MANAGEMENT ---
         let state = {
@@ -498,33 +542,57 @@
             // --- Progression mode state ---
             progression: (() => {
                 // Seed from the first preset. We re-implement the bare minimum
-                // of token parsing here (root / slash-chord → degree+inversion)
-                // because `parseProgressionTokens` is declared later in this
-                // script (const — not hoisted). Keep this in sync with the
-                // full parser below. Presets are assumed valid at author time.
+                // of token parsing here (root / slash-chord → degree+inversion
+                // and now also accidental for borrowed roots/basses) because
+                // `parseProgressionTokens` is declared later in this script
+                // (const — not hoisted). Keep this in sync with the full
+                // parser below. Presets are assumed valid at author time so
+                // we skip error reporting.
                 const tokens = PROGRESSION_PRESETS[0].tokens;
                 const degrees = [];
+                const accidentals = [];
                 const inversions = [];
+                const splitAcc = (s) => s.startsWith('b')
+                    ? { acc: -1, num: parseInt(s.slice(1), 10) - 1 }
+                    : { acc: 0,  num: parseInt(s, 10) - 1 };
                 for (const t of tokens) {
                     const [a, b] = t.split('/');
-                    const d = parseInt(a, 10) - 1;
-                    degrees.push(d);
+                    const root = splitAcc(a);
+                    degrees.push(root.num);
+                    accidentals.push(root.acc);
                     if (b === undefined) {
                         inversions.push(0);
                     } else {
-                        const bZero = parseInt(b, 10) - 1;
-                        const triad = [d % 7, (d + 2) % 7, (d + 4) % 7];
-                        const idx = triad.indexOf(bZero);
+                        // Inversion = position of the bass note among the
+                        // chord's chromatic triad members. Borrowed roots
+                        // default to a Major triad ([0, 4, 7] from root);
+                        // diatonic roots use the scale's natural triad
+                        // quality. Bass token can also carry `b`.
+                        const bass = splitAcc(b);
+                        const scaleSteps = SCALE_FORMULAS.Major;
+                        const rootChroma = ((scaleSteps[root.num] + root.acc) % 12 + 12) % 12;
+                        const bassChroma = ((scaleSteps[bass.num] + bass.acc) % 12 + 12) % 12;
+                        const bassFromRoot = ((bassChroma - rootChroma) % 12 + 12) % 12;
+                        const triad = root.acc !== 0
+                            ? TRIAD_INTERVALS_BY_QUALITY['Triad']
+                            : TRIAD_INTERVALS_BY_QUALITY[MAJOR_CHORD_QUALITIES[root.num][0]];
+                        const idx = triad.indexOf(bassFromRoot);
                         inversions.push(idx === -1 ? 0 : idx);
                     }
                 }
                 return {
                     // 0-indexed scale degrees (display 1..7 - 1)
                     degrees,
+                    // Per-step accidental on the chord ROOT: -1 (♭), 0 (natural),
+                    // +1 (♯, reserved for future). When non-zero, the step is
+                    // a borrowed/non-diatonic chord (currently Major-scale only)
+                    // and gets a default Major-triad quality. Reset to 0 on
+                    // key/scale change.
+                    accidentals,
                     // One modifier per step (same vocabulary as BASE_MODIFIERS keys)
                     modifiers: degrees.map(() => 'Triad'),
                     // One inversion level per step (0 = Root .. 3 = 3rd Inv).
-                    // Slash-chord tokens ("5/7") seed an inversion here.
+                    // Slash-chord tokens ("5/7", "b7/2") seed an inversion here.
                     // Reset to 0 on key/scale change or when Apply/preset
                     // replaces degrees. Modifier changes preserve the value
                     // and rely on clampInversion at render time.
@@ -570,6 +638,21 @@
         const semitoneToKeyDegree = (semitones) => {
             const s = ((semitones % 12) + 12) % 12;
             return SCALE_DEGREE_LABELS[s];
+        };
+
+        // Reverse-format a chromatic semitone (relative to tonic) into the
+        // exact textual token the user would type. Prefers a plain "1..7"
+        // form when the semitone IS in the current scale (so a Bb in C-minor
+        // round-trips as "7", not "b7"); falls back to the Major-relative
+        // SCALE_DEGREE_LABELS when the note is borrowed (e.g. Bb in C-major
+        // → "b7"). Used by the progression-input formatter when it needs to
+        // reverse-engineer a slash-chord bass token from inversion state.
+        const semitoneToInputLabel = (semitones, scaleType) => {
+            const norm = ((semitones % 12) + 12) % 12;
+            const scaleSteps = SCALE_FORMULAS[scaleType] || SCALE_FORMULAS.Major;
+            const idx = scaleSteps.indexOf(norm);
+            if (idx !== -1) return String(idx + 1);
+            return SCALE_DEGREE_LABELS[norm];
         };
 
         const getIntervalKey = (diatonicTriad, diatonicSeventh, modifier) => {
@@ -620,14 +703,38 @@
             return notes.map(note => toDisplayNote(note, useFlats));
         };
 
-        const getChordDetails = (root, scaleType, degree, modifier, displayAllOctaves, inversion = 0, chordRelativeLabels = false) => {
+        const getChordDetails = (root, scaleType, degree, modifier, displayAllOctaves, inversion = 0, chordRelativeLabels = false, accidental = 0) => {
             const scaleNotes = getScaleNotes(root, scaleType);
-            const qualities = scaleType === 'Major' ? MAJOR_CHORD_QUALITIES : MINOR_CHORD_QUALITIES;
-            const [diatonicTriad, diatonicSeventh, romanNumeral] = qualities[degree];
+            const useFlatsForKey = FLAT_KEYS.includes(root);
+
+            // Two paths for chord ROOT resolution:
+            //   - DIATONIC (accidental === 0, default): use the scale's natural
+            //     triad quality + scale-spelled root note, exactly as before.
+            //   - BORROWED (accidental !== 0): override quality to a Major
+            //     triad / dom7 baseline (per Q2 A1) and compute the chromatic
+            //     root by stepping ±1 semitone from the diatonic position.
+            //     Borrowed roots prefer flat spelling (matches the `b` in the
+            //     user's input token).
+            let diatonicTriad, diatonicSeventh, romanNumeral;
+            let chordRootNote, chordRoot011Index;
+            if (accidental !== 0) {
+                diatonicTriad = 'Triad';
+                diatonicSeventh = '7th';
+                const tonicIdx = getChromaticIndex(root);
+                const scaleSteps = SCALE_FORMULAS[scaleType];
+                chordRoot011Index = normalizeIndex(tonicIdx + scaleSteps[degree] + accidental);
+                const rootSharp = ALL_NOTES_SHARP[chordRoot011Index];
+                const useFlatForRoot = accidental === -1 ? true : useFlatsForKey;
+                chordRootNote = toDisplayNote(rootSharp, useFlatForRoot);
+                romanNumeral = formatBorrowedRoman(degree, accidental);
+            } else {
+                const qualities = scaleType === 'Major' ? MAJOR_CHORD_QUALITIES : MINOR_CHORD_QUALITIES;
+                [diatonicTriad, diatonicSeventh, romanNumeral] = qualities[degree];
+                chordRootNote = scaleNotes[degree];
+                chordRoot011Index = getChromaticIndex(chordRootNote);
+            }
             const finalIntervalKey = getIntervalKey(diatonicTriad, diatonicSeventh, modifier);
             const intervals = INTERVALS[finalIntervalKey] || INTERVALS['Triad'];
-            const chordRootNote = scaleNotes[degree];
-            const chordRoot011Index = getChromaticIndex(chordRootNote);
 
             const omittedIntervals = [];
             if (finalIntervalKey === '11th') { omittedIntervals.push(4, 7); } 
@@ -687,12 +794,24 @@
                 KEYBOARD_NOTES.filter(key => targetIntervalIndices.includes(getChromaticIndex(key.note)))
                 : baseChordNotes;
 
+            // For borrowed chords, prefer flats for any chord tones that
+            // aren't members of the current scale — e.g. ♭VII in C major
+            // should show "Bb / D / F", not "A# / D / F". Diatonic chords
+            // continue to use the existing scale-aware lookup.
+            const useFlatsForBorrowed = accidental === -1 || useFlatsForKey;
+
             const highlightNotesWithOctave = notesToHighlight.map(n => {
                 let displayNote = n.note;
                 const noteIndex = getChromaticIndex(n.note);
                 const scaleNoteAtIndex = scaleNotes.find(scaleNote => getChromaticIndex(scaleNote) === noteIndex);
 
-                if (scaleNoteAtIndex) { displayNote = scaleNoteAtIndex; }
+                if (scaleNoteAtIndex) {
+                    displayNote = scaleNoteAtIndex;
+                } else if (accidental !== 0) {
+                    // Non-scale tone in a borrowed chord → spell it with the
+                    // borrowed accidental's preference (flat for `b`).
+                    displayNote = toDisplayNote(n.note, useFlatsForBorrowed);
+                }
 
                 // Chord-relative interval is still needed for two things:
                 //   (1) flagging "omitted" guide tones on extended chords,
@@ -809,8 +928,11 @@
                 const scaleMatch = scaleNotes.find(
                     s => getChromaticIndex(s) === bassChromaticIndex
                 );
-                const useFlats = FLAT_KEYS.includes(root);
-                const bassDisplay = scaleMatch || toDisplayNote(bassNoteSharp, useFlats);
+                // Borrowed chords (accidental === -1) prefer flat spellings
+                // for the bass too, so "Bb/D" stays consistent rather than
+                // flipping to "A#/D" when D# happens to be the sharp form.
+                const useFlatsForBass = accidental === -1 ? true : useFlatsForKey;
+                const bassDisplay = scaleMatch || toDisplayNote(bassNoteSharp, useFlatsForBass);
                 chordName = `${baseChordName}/${bassDisplay}`;
 
                 // Append the key-relative degree version of the slash —
@@ -1058,12 +1180,16 @@
 
 
                 if (key.isWhite) {
-                    // White Key
+                    // White Key. C keys carry the `is-c-marker` class so the
+                    // user always has a visual anchor for octave boundaries.
+                    // The marker tint defers to highlight fills (which use
+                    // !important), so it's only visible on un-highlighted Cs.
+                    const cMarkerClass = key.note === 'C' ? 'is-c-marker' : '';
                     const whiteKey = `<rect 
                         id="key-${key.index}" 
                         x="${xPos}" y="0" width="${KEY_WIDTH}" height="${WHITE_KEY_HEIGHT}" 
                         rx="4" ry="4" 
-                        class="white-key ${highlightClass}"
+                        class="white-key ${cMarkerClass} ${highlightClass}"
                     />`;
                     svg.insertAdjacentHTML('beforeend', whiteKey); // White keys go first
 
@@ -1379,7 +1505,9 @@
 
         // --- PROGRESSION MODE RENDERING ---
 
-        // Compact piano dimensions for the progression steps.
+        // Compact piano dimensions for the progression steps. The visible
+        // range is fixed to C3-C6 so the added low bass plus higher chord
+        // extensions/inversions remain visible in one consistent window.
         const PROGRESSION_PIANO_OPTS = {
             keyWidth: 28,
             whiteHeight: 120,
@@ -1387,38 +1515,76 @@
             keyLabelSize: 10,
             funcLabelSize: 10,
             funcLabelWhiteY: 16,
-            autoScrollToC4: true,
+            autoScrollToC4: false,
+            startIndex: C3_INDEX,
+            endIndex: C6_INDEX,
         };
 
-        // Compute the piano range for progression steps based on the shared
-        // octave toggle. When "Display Across All Octaves" is on, we must show
-        // the full 88-key range so every highlight is visible; otherwise we
-        // restrict to C3..C6 — enough to cover every diatonic voicing plus the
-        // 13th chord extension (root@C4 + up to 21 semitones), while cutting
-        // SVG node count from ~88 to ~37 per step for faster rendering.
-        const getProgressionPianoOpts = () => {
-            const opts = { ...PROGRESSION_PIANO_OPTS };
-            if (!state.displayAllOctaves) {
-                opts.startIndex = C3_INDEX;
-                opts.endIndex = C6_INDEX;
+        // Progression mode uses a fixed display voicing:
+        //   low-octave duplicate of the current bass note + the current chord
+        //   voicing itself. For root position this means "低八度根音 + 根音 +
+        //   和弦音"; for inversions the duplicated low note follows the
+        //   inverted bass (e.g. C/E -> E3 + E4 G4 C5).
+        const getProgressionDisplayDetails = (degreeIdx, modifierKey, inversionValue = 0, accidental = 0) => {
+            const details = getChordDetails(
+                state.selectedKey, state.scaleType,
+                degreeIdx, modifierKey, false,
+                inversionValue, state.chordRelativeLabels, accidental
+            );
+            const voicedNotes = details.highlightNotesWithOctave || [];
+            if (voicedNotes.length === 0) {
+                return {
+                    ...details,
+                    progressionHighlightNotesWithOctave: [],
+                    progressionDisplayFullNotes: [],
+                };
             }
-            return opts;
+
+            const bassNote = voicedNotes[0];
+            const lowBassIndex = bassNote.keyboardIndex - 12;
+            const lowBassNote = (lowBassIndex >= 0 && KEYBOARD_NOTES[lowBassIndex])
+                ? {
+                    ...bassNote,
+                    fullNote: KEYBOARD_NOTES[lowBassIndex].fullNote,
+                    keyboardIndex: lowBassIndex,
+                }
+                : null;
+
+            const progressionHighlightNotesWithOctave = lowBassNote
+                ? [lowBassNote, ...voicedNotes]
+                : voicedNotes.slice();
+
+            return {
+                ...details,
+                progressionHighlightNotesWithOctave,
+                progressionDisplayFullNotes: progressionHighlightNotesWithOctave.map(n =>
+                    `${n.displayNote}${KEYBOARD_NOTES[n.keyboardIndex]?.octave ?? ''}`
+                ),
+            };
         };
 
-        // Romans for the 7 diatonic degrees (reused for labeling steps).
-        const getRomanForDegree = (degreeIndex) => {
+        // Roman numeral for a step. For diatonic chords this returns the
+        // scale's natural label (e.g. "ii" for D-min in C major). For
+        // borrowed chords it returns the uppercase + accidental form
+        // ("♭VII", "♭III" …) since borrowed chords always default to a
+        // Major-triad quality per spec.
+        const getRomanForDegree = (degreeIndex, accidental = 0) => {
+            if (accidental !== 0) return formatBorrowedRoman(degreeIndex, accidental);
             const qualities = state.scaleType === 'Major' ? MAJOR_CHORD_QUALITIES : MINOR_CHORD_QUALITIES;
             return qualities[degreeIndex][2];
         };
 
-        const renderProgressionStepCard = (stepIdx, degreeIdx, modifierKey, inversionValue = 0) => {
-            const details = getChordDetails(
-                state.selectedKey, state.scaleType,
-                degreeIdx, modifierKey, state.displayAllOctaves,
-                inversionValue, state.chordRelativeLabels
+        const renderProgressionStepCard = (stepIdx, degreeIdx, modifierKey, inversionValue = 0, accidental = 0) => {
+            const details = getProgressionDisplayDetails(
+                degreeIdx, modifierKey, inversionValue, accidental
             );
-            const roman = getRomanForDegree(degreeIdx);
-            const displayDegree = degreeIdx + 1; // 1-indexed for user display
+            const roman = getRomanForDegree(degreeIdx, accidental);
+            // Display label: "1".."7" for diatonic, "♭7" / "♯4" for borrowed.
+            // We use ACCIDENTAL_DISPLAY (Unicode) here because this string is
+            // pure UI affordance — the input box still uses ASCII via
+            // formatStepDegreeLabel.
+            const displayDegree =
+                `${ACCIDENTAL_DISPLAY[String(accidental)]}${degreeIdx + 1}`;
             // Clamp once per render for the active-button styling — the raw
             // state value may reference an inversion that the current chord
             // can no longer satisfy (e.g. 3rd-inv request after the modifier
@@ -1488,8 +1654,8 @@
                             <span class="text-xs text-gray-500 font-mono">(级数 ${displayDegree})</span>
                             <h3 class="text-lg font-extrabold text-white">${details.name}</h3>
                             <span class="text-xs text-gray-400 font-mono tracking-wide"
-                                title="绝对音名 (Notes, 按当前声部顺序)">
-                                · ${details.highlightNotes.join(' - ')}
+                                title="绝对音名 (Notes with Octaves, 含低八度补低音)">
+                                · ${details.progressionDisplayFullNotes.join(' - ')}
                             </span>
                         </div>
                         <div class="flex flex-wrap gap-1 justify-start sm:justify-end">
@@ -1512,16 +1678,17 @@
         const renderProgressionStepPiano = (stepEl, stepIdx) => {
             const svgEl = stepEl.querySelector('.progression-piano-svg');
             const containerEl = stepEl.querySelector('.progression-keyboard-container');
-            const { degrees, modifiers, inversions } = state.progression;
-            const details = getChordDetails(
-                state.selectedKey, state.scaleType,
-                degrees[stepIdx], modifiers[stepIdx], state.displayAllOctaves,
-                inversions?.[stepIdx] || 0, state.chordRelativeLabels
+            const { degrees, modifiers, inversions, accidentals } = state.progression;
+            const details = getProgressionDisplayDetails(
+                degrees[stepIdx],
+                modifiers[stepIdx],
+                inversions?.[stepIdx] || 0,
+                accidentals?.[stepIdx] || 0,
             );
             renderPianoKeyboard(
                 svgEl, containerEl,
-                details.highlightNotesWithOctave,
-                getProgressionPianoOpts()
+                details.progressionHighlightNotesWithOctave,
+                PROGRESSION_PIANO_OPTS
             );
         };
 
@@ -1577,10 +1744,14 @@
 
         // Build a detached DOM element for a single step from its HTML string.
         const buildProgressionStepElement = (stepIdx) => {
-            const { degrees, modifiers, inversions } = state.progression;
+            const { degrees, modifiers, inversions, accidentals } = state.progression;
             const wrapper = document.createElement('div');
             wrapper.innerHTML = renderProgressionStepCard(
-                stepIdx, degrees[stepIdx], modifiers[stepIdx], inversions?.[stepIdx] || 0
+                stepIdx,
+                degrees[stepIdx],
+                modifiers[stepIdx],
+                inversions?.[stepIdx] || 0,
+                accidentals?.[stepIdx] || 0,
             ).trim();
             return wrapper.firstElementChild;
         };
@@ -1606,7 +1777,9 @@
             if (input && document.activeElement !== input) {
                 input.value = formatProgressionSteps(
                     state.progression.degrees,
+                    state.progression.accidentals,
                     state.progression.inversions,
+                    state.scaleType,
                 );
             }
         };
@@ -1620,17 +1793,25 @@
             if (document.activeElement !== input) {
                 input.value = formatProgressionSteps(
                     state.progression.degrees,
+                    state.progression.accidentals,
                     state.progression.inversions,
+                    state.scaleType,
                 );
             }
 
             // Full rebuild: used only when step count or global context
             // (key / scale / displayAllOctaves / mode) changes.
             const container = document.getElementById('progression-steps');
-            const { degrees, modifiers, inversions } = state.progression;
+            const { degrees, modifiers, inversions, accidentals } = state.progression;
 
             container.innerHTML = degrees.map((_, i) =>
-                renderProgressionStepCard(i, degrees[i], modifiers[i], inversions?.[i] || 0)
+                renderProgressionStepCard(
+                    i,
+                    degrees[i],
+                    modifiers[i],
+                    inversions?.[i] || 0,
+                    accidentals?.[i] || 0,
+                )
             ).join('');
 
             Array.from(container.children).forEach((stepEl, i) => {
@@ -1741,10 +1922,16 @@
                 newState.currentChordIndex = 0;
                 newState.secondary251Expanded = false;
                 newState.previewSecondary = null;
-                // Reset progression modifiers + inversions (preserve degrees).
+                // Reset progression modifiers + inversions + accidentals
+                // (preserve degrees so the user keeps the *shape* of their
+                // current progression). Accidentals reset because borrowed
+                // input is currently Major-only and the borrowed-vs-diatonic
+                // intent shifts when scale changes; resetting forces an
+                // explicit re-pick for clarity.
                 const nextProgression = newState.progression ?? state.progression;
                 newState.progression = {
                     ...nextProgression,
+                    accidentals: nextProgression.degrees.map(() => 0),
                     modifiers: nextProgression.degrees.map(() => 'Triad'),
                     inversions: nextProgression.degrees.map(() => 0),
                 };
@@ -1777,55 +1964,99 @@
 
         // --- PROGRESSION INPUT PARSING ---
 
-        // Parse a single progression token into { degree, inversion } (both
-        // 0-indexed). Supports two shapes:
-        //   "5"    → plain diatonic triad on scale degree 5 (inversion 0)
-        //   "5/7"  → slash chord: triad built on degree 5, scale degree 7 as
-        //            bass. The bass MUST be a chord tone of the triad
-        //            ({degree, degree+2, degree+4} mod 7 in scale-degree
-        //            space) — otherwise it cannot be expressed as a
-        //            triad inversion and we return an error.
-        // Returns { valid, degree, inversion, error }.
-        const parseProgressionToken = (raw) => {
+        // Parse a single progression token into
+        //   { degree, accidental, inversion }
+        // (all 0-indexed). Token grammar:
+        //
+        //   ROOT       := "b"? [1-7]              # optional flat prefix
+        //   BASS       := "b"? [1-7]
+        //   TOKEN      := ROOT ( "/" BASS )?
+        //
+        //   "5"    → diatonic V triad, root position
+        //   "5/7"  → V with diatonic 7° in bass (1st inversion)
+        //   "b7"   → BORROWED ♭VII triad (Bb major in C-major), root position
+        //   "b7/2" → ♭VII with diatonic 2 in bass (1st inversion of Bb)
+        //   "1/b3" → I with borrowed ♭3 in bass — only valid if ♭3 happens to
+        //             be a chord tone of I (it isn't; will error)
+        //   "b3/b7"→ ♭III with ♭7 in bass (Eb/Bb, 2nd inversion)
+        //
+        // Borrowed (accidental ≠ 0) tokens are currently restricted to Major
+        // scale per spec (Q3 A1) — Minor input rejects them with a hint.
+        // The bass position MUST land on one of the chord's chromatic triad
+        // members (default = Major triad for borrowed roots; the scale's
+        // natural triad quality for diatonic roots) — otherwise the slash
+        // chord can't be expressed as a triad inversion and we error out.
+        const parseProgressionToken = (raw, scaleType = 'Major') => {
             const t = (raw || '').trim();
             if (!t) return { valid: false, error: '空 token' };
 
-            // Root-only: just a scale degree 1..7
-            if (/^[1-7]$/.test(t)) {
-                return { valid: true, degree: parseInt(t, 10) - 1, inversion: 0 };
-            }
-
-            // Slash chord a/b
-            const m = t.match(/^([1-7])\/([1-7])$/);
+            const m = t.match(/^(b?)([1-7])(?:\/(b?)([1-7]))?$/);
             if (!m) {
                 return {
                     valid: false,
-                    error: `非法 token "${t}"：每项必须是 1-7 的整数，或 a/b 斜杠和弦（如 5/7）`,
+                    error: `非法 token "${t}"：格式应为 [b]N 或 [b]N/[b]N，N=1..7（如 5、5/7、b7、b7/2）`,
                 };
             }
-            const dZero = parseInt(m[1], 10) - 1;
-            const bZero = parseInt(m[2], 10) - 1;
-            // Scale-degree members of the diatonic triad built on `dZero`.
-            // Works for both Major and Minor scales because triads are built
-            // by stacking thirds in scale-degree space (mod 7) regardless of
-            // chord quality.
-            const triad = [dZero % 7, (dZero + 2) % 7, (dZero + 4) % 7];
-            const idx = triad.indexOf(bZero);
-            if (idx === -1) {
-                const legal = triad.map(i => i + 1).join('/');
+            const acc      = m[1] === 'b' ? -1 : 0;
+            const degZero  = parseInt(m[2], 10) - 1;
+            const hasSlash = m[3] !== undefined;
+            const bassAcc  = m[3] === 'b' ? -1 : 0;
+            const bassDeg  = hasSlash ? parseInt(m[4], 10) - 1 : null;
+
+            // Borrowed input is Major-only for v1. Minor scale's natural 7° is
+            // already ♭7 in fixed-major terms, so allowing `b7` in minor would
+            // conflict with the user's "7" notation; we punt on that edge case.
+            if ((acc !== 0 || bassAcc !== 0) && scaleType !== 'Major') {
                 return {
                     valid: false,
-                    error: `非法斜杠和弦 "${t}"：低音 ${bZero + 1} 不是 ${dZero + 1} 级三和弦内音（允许 ${legal}）`,
+                    error: `离调和弦输入（${t}）目前仅在 Major 调下支持`,
                 };
             }
-            return { valid: true, degree: dZero, inversion: idx };
+
+            if (!hasSlash) {
+                return { valid: true, degree: degZero, accidental: acc, inversion: 0 };
+            }
+
+            // Compute chromatic root + bass relative to tonic, then bass
+            // relative to root. The chord's chromatic triad-member set
+            // depends on default quality:
+            //   - borrowed root  → always Major triad (per Q2 A1).
+            //   - diatonic root  → scale's natural triad quality.
+            const scaleSteps = SCALE_FORMULAS[scaleType];
+            const rootChromaFromTonic = ((scaleSteps[degZero]  + acc)     % 12 + 12) % 12;
+            const bassChromaFromTonic = ((scaleSteps[bassDeg]  + bassAcc) % 12 + 12) % 12;
+            const bassFromRoot        = ((bassChromaFromTonic - rootChromaFromTonic) % 12 + 12) % 12;
+
+            let triadIntervals;
+            if (acc !== 0) {
+                triadIntervals = TRIAD_INTERVALS_BY_QUALITY['Triad'];
+            } else {
+                const qualities = scaleType === 'Major' ? MAJOR_CHORD_QUALITIES : MINOR_CHORD_QUALITIES;
+                const qkey = qualities[degZero][0];
+                triadIntervals = TRIAD_INTERVALS_BY_QUALITY[qkey] || TRIAD_INTERVALS_BY_QUALITY['Triad'];
+            }
+
+            const inversion = triadIntervals.indexOf(bassFromRoot);
+            if (inversion === -1) {
+                // Build a friendly "allowed bass tokens" list back in the
+                // user's input vocabulary — natural for diatonic basses,
+                // borrowed-style ("b7" etc.) for the rest.
+                const legal = triadIntervals
+                    .map(iv => semitoneToInputLabel(rootChromaFromTonic + iv, scaleType))
+                    .join(' / ');
+                const rootDisplay = formatStepDegreeLabel(degZero, acc);
+                return {
+                    valid: false,
+                    error: `非法斜杠和弦 "${t}"：低音不是 ${rootDisplay} 级三和弦内音（允许 ${legal}）`,
+                };
+            }
+
+            return { valid: true, degree: degZero, accidental: acc, inversion };
         };
 
         // Parse a progression expressed as an array of tokens (already split).
-        // Returns { valid, degrees, inversions, error } using 0-indexed values.
-        // Used by both `parseProgressionInput` (user text) and the preset-click
-        // handler (token array from PROGRESSION_PRESETS).
-        const parseProgressionTokens = (tokens) => {
+        // Returns { valid, degrees, accidentals, inversions, error }.
+        const parseProgressionTokens = (tokens, scaleType = 'Major') => {
             if (tokens.length < PROGRESSION_MIN || tokens.length > PROGRESSION_MAX) {
                 return {
                     valid: false,
@@ -1833,48 +2064,70 @@
                 };
             }
             const degrees = [];
+            const accidentals = [];
             const inversions = [];
             for (const t of tokens) {
-                const r = parseProgressionToken(t);
+                const r = parseProgressionToken(t, scaleType);
                 if (!r.valid) return { valid: false, error: r.error };
                 degrees.push(r.degree);
+                accidentals.push(r.accidental);
                 inversions.push(r.inversion);
             }
-            return { valid: true, degrees, inversions };
+            return { valid: true, degrees, accidentals, inversions };
         };
 
-        // Parse raw textual input ("1,5/7,6,5" / "1 5/7 6 5" / "1-5/7-6-5")
-        // into { valid, degrees, inversions, error }. Separators: space, comma
+        // Parse raw textual input ("1,b7,4,5" / "1-5/7-6-5" etc.) into the
+        // shape consumed by `applyProgressionSteps`. Separators: space, comma
         // or dash (slashes inside a token are preserved).
-        const parseProgressionInput = (raw) => {
+        const parseProgressionInput = (raw, scaleType = 'Major') => {
             const trimmed = (raw || '').trim();
             if (!trimmed) {
-                return { valid: false, error: '请输入和弦进行，例如 1-6-4-5 或 1-5/7-6-5' };
+                return { valid: false, error: '请输入和弦进行，例如 1-6-4-5、1-5/7-6-5 或 1-b7-4-1' };
             }
             const tokens = trimmed.split(/[\s,\-]+/).filter(Boolean);
-            return parseProgressionTokens(tokens);
+            return parseProgressionTokens(tokens, scaleType);
         };
 
         // Reverse of parseProgressionToken: given a step's stored
-        // degree+inversion, produce the textual token ("5" or "5/7") for
-        // the input box / preset dropdown. Only inversions 1 and 2 round-trip
-        // through slash notation — 3rd inversion (only possible on 7ths)
-        // collapses to just the root number, since a/b cannot express
-        // "bass = 7th of chord" without overloading the grammar. Inv 3
-        // therefore does not survive a text-layer round-trip; if the user
-        // re-applies the text, any 3rd-inv state is reset to Root, which is
-        // consistent with how modifier values are also reset on Apply.
-        const formatProgressionToken = (degreeZero, inversion) => {
-            const deg = degreeZero + 1;
-            if (inversion !== 1 && inversion !== 2) return String(deg);
-            const triad = [degreeZero % 7, (degreeZero + 2) % 7, (degreeZero + 4) % 7];
-            const bass = triad[inversion] + 1;
-            return `${deg}/${bass}`;
+        //   { degree, accidental, inversion }
+        // produce the textual token ("5", "5/7", "b7", "b7/2") for the input
+        // box and the preset dropdown. Notes:
+        //   - Only inversions 1 and 2 round-trip through slash notation. 3rd
+        //     inversion (only possible on 7th chords) collapses to just the
+        //     root token because the a/b grammar can't unambiguously encode
+        //     "bass = 7th of chord" — same convention as before borrowed
+        //     chords were added; modifiers also collapse on text round-trip.
+        //   - Bass scale-degree label is reverse-engineered chromatically so
+        //     borrowed roots emit borrowed-flavor basses where appropriate
+        //     (e.g. b3 in 2nd inv of ♭III/♭7 → "b3/b7").
+        const formatProgressionToken = (degreeZero, accidental, inversion, scaleType = 'Major') => {
+            const rootStr = formatStepDegreeLabel(degreeZero, accidental);
+            if (inversion !== 1 && inversion !== 2) return rootStr;
+
+            // Recompute chromatic triad to find the bass note for this inv.
+            const scaleSteps = SCALE_FORMULAS[scaleType] || SCALE_FORMULAS.Major;
+            const rootChroma = ((scaleSteps[degreeZero] + accidental) % 12 + 12) % 12;
+            let triadIntervals;
+            if (accidental !== 0) {
+                triadIntervals = TRIAD_INTERVALS_BY_QUALITY['Triad'];
+            } else {
+                const qualities = scaleType === 'Major' ? MAJOR_CHORD_QUALITIES : MINOR_CHORD_QUALITIES;
+                triadIntervals = TRIAD_INTERVALS_BY_QUALITY[qualities[degreeZero][0]]
+                    || TRIAD_INTERVALS_BY_QUALITY['Triad'];
+            }
+            const bassSemi = rootChroma + (triadIntervals[inversion] ?? 0);
+            const bassStr  = semitoneToInputLabel(bassSemi, scaleType);
+            return `${rootStr}/${bassStr}`;
         };
 
-        const formatProgressionSteps = (degrees, inversions, separator = '-') => {
+        const formatProgressionSteps = (degrees, accidentals, inversions, scaleType = 'Major', separator = '-') => {
             return degrees
-                .map((d, i) => formatProgressionToken(d, inversions?.[i] || 0))
+                .map((d, i) => formatProgressionToken(
+                    d,
+                    accidentals?.[i] || 0,
+                    inversions?.[i] || 0,
+                    scaleType,
+                ))
                 .join(separator);
         };
 
@@ -1889,14 +2142,16 @@
             }
         };
 
-        // Apply a parsed progression ({ degrees, inversions }) — replaces the
-        // step count, resets modifiers to Triad, and seeds the parsed
-        // inversion per step. Any prior modifier / inversion state is dropped
-        // (Apply / preset is the user's explicit "rebuild" action).
+        // Apply a parsed progression ({ degrees, accidentals, inversions }) —
+        // replaces the step count, resets modifiers to Triad, and seeds the
+        // parsed accidentals + inversions per step. Any prior modifier /
+        // inversion / accidental state is dropped (Apply / preset is the
+        // user's explicit "rebuild" action).
         const applyProgressionSteps = (parsed) => {
-            const { degrees, inversions } = parsed;
+            const { degrees, accidentals, inversions } = parsed;
             const nextProgression = {
                 degrees,
+                accidentals: (accidentals || degrees.map(() => 0)).slice(),
                 modifiers: degrees.map(() => 'Triad'),
                 inversions: inversions.slice(),
             };
@@ -1965,7 +2220,10 @@
             // Progression Apply (button + Enter key)
             const applyProgressionFromInput = () => {
                 const raw = document.getElementById('progression-input').value;
-                const parsed = parseProgressionInput(raw);
+                // Pass current scaleType so the parser can enforce the
+                // "borrowed input is Major-only" rule (Q3 A1) and surface a
+                // friendly error in Minor.
+                const parsed = parseProgressionInput(raw, state.scaleType);
                 if (!parsed.valid) {
                     showProgressionError(parsed.error);
                     return;
@@ -1992,7 +2250,7 @@
                 e.target.value = '';
                 if (Number.isNaN(idx) || idx < 0 || idx >= PROGRESSION_PRESETS.length) return;
                 const preset = PROGRESSION_PRESETS[idx];
-                const parsed = parseProgressionTokens(preset.tokens);
+                const parsed = parseProgressionTokens(preset.tokens, state.scaleType);
                 if (!parsed.valid) {
                     // Should not happen for author-curated presets, but surface
                     // the error just in case someone adds an invalid entry.
@@ -2035,10 +2293,13 @@
             });
 
             // Seed the progression input with the default progression,
-            // including any slash-chord notation from the seed inversions.
+            // including any slash-chord notation from the seed inversions and
+            // any borrowed-chord accidentals.
             document.getElementById('progression-input').value = formatProgressionSteps(
                 state.progression.degrees,
+                state.progression.accidentals,
                 state.progression.inversions,
+                state.scaleType,
             );
 
             setupEventListeners();
